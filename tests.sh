@@ -14,11 +14,18 @@ jdescribe () {
 
 jtest () {
     command="$1"
+    display_command="$command"
+
+    if [[ "$command" == '! '* ]]
+    then
+        display_command="${red}!${reset} ${command#! }"
+    fi
+
     if output="$(eval "$command" 2>&1)"
     then
-        printf '%sPASS%s: %s\n' "$green" "$reset" "$command" >&2
+        printf '%sPASS%s: %b\n' "$green" "$reset" "$display_command" >&2
     else
-        printf '%sFAIL%s: %s\n' "$red" "$reset" "$command" >&2
+        printf '%sFAIL%s: %b\n' "$red" "$reset" "$display_command" >&2
         echo "$output" >&2
         return 1
     fi

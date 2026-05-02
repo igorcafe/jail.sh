@@ -17,6 +17,7 @@ usage: jail [options] -- command [args...]
 options:
   -p LIST             expose extra programs in /bin (comma-separated)
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
+  -d DEVICE           expose /dev/DEVICE inside the jail
   -e NAME=VALUE       set an environment variable inside the jail
   --wd PATH           change working directory inside the jail
   --share-wd MODE     bind current directory at same path; MODE must be ro or rw
@@ -42,6 +43,7 @@ fi
 
 extra_programs=()
 custom_binds=()
+custom_devices=()
 custom_env=()
 working_directory=""
 shared_working_directory=0
@@ -115,6 +117,36 @@ add_custom_bind () {
     fi
 
     custom_binds+=("$src" "$dest" "$mode")
+}
+
+add_device () {
+    device="$1"
+
+    if [[ "$device" == "" ]]
+    then
+        error "-d requires a device name"
+        exit 1
+    fi
+
+    if [[ "$device" == /* ]]
+    then
+        error "-d expects a device name without /dev/: $device"
+        exit 1
+    fi
+
+    if [[ "$device" == *..* ]]
+    then
+        error "-d device name cannot contain '..': $device"
+        exit 1
+    fi
+
+    if [[ ! -e "/dev/$device" ]]
+    then
+        error "-d device does not exist: /dev/$device"
+        exit 1
+    fi
+
+    custom_devices+=("$device")
 }
 
 add_working_directory_bind () {
@@ -201,6 +233,16 @@ do
             fi
 
             add_custom_bind "$2"
+            shift 2
+            ;;
+        -d)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "-d requires a device name"
+                exit 1
+            fi
+
+            add_device "$2"
             shift 2
             ;;
         -e)
@@ -395,6 +437,23 @@ add_bind () {
     bw_binds+=("$bind_arg" "$src" "$dest")
 }
 
+add_dev_bind () {
+    device="$1"
+    src="/dev/$device"
+    dest="/dev/$device"
+
+    for bound_dest in "${bound_dests[@]}"
+    do
+        if [[ "$dest" == "$bound_dest" ]]
+        then
+            return
+        fi
+    done
+
+    bound_dests+=("$dest")
+    bw_binds+=(--dev-bind "$src" "$dest")
+}
+
 is_under_nix_bind () {
     path="$1"
 
@@ -421,6 +480,13 @@ bw_args=(
     --dir /tmp
     --chdir "$working_directory"
 )
+
+add_dev_bind null
+
+for device in "${custom_devices[@]}"
+do
+    add_dev_bind "$device"
+done
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
 do

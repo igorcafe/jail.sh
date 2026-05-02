@@ -18,14 +18,14 @@ options:
   -p LIST             expose extra programs in /bin (comma-separated)
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -e NAME=VALUE       set an environment variable inside the jail
-  --wd MODE           bind current directory at same path; MODE must be ro or rw
+  --share-wd MODE     bind current directory at same path; MODE must be ro or rw
   --home PATH         alias for -e HOME=PATH
 
 examples:
   jail -- emacs
   jail -p sh,printf -- emacs -nw
   jail -b /tmp:/host-tmp:rw -- sh
-  jail --wd rw -- sh
+  jail --share-wd rw -- sh
   jail --home /tmp -- emacs -nw
 EOF
 }
@@ -113,7 +113,7 @@ add_working_directory_bind () {
 
     if [[ "$mode" != "ro" && "$mode" != "rw" ]]
     then
-        error "--wd mode must be ro or rw"
+        error "--share-wd mode must be ro or rw"
         exit 1
     fi
 
@@ -191,10 +191,10 @@ do
             add_custom_env "HOME=$2"
             shift 2
             ;;
-        --wd)
+        --share-wd)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
-                error "--wd requires ro or rw"
+                error "--share-wd requires ro or rw"
                 exit 1
             fi
 

@@ -10,28 +10,108 @@ error () {
     echo -e "\033[1;31merror\033[0m: $@" >&2
 }
 
+extra_executables=()
+
+add_extra_executables () {
+    list="$1"
+
+    if [[ "$list" == "" ]]
+    then
+        error "--executables requires a comma-separated list"
+        exit 1
+    fi
+
+    IFS=',' read -r -a executables <<< "$list"
+    for executable in "${executables[@]}"
+    do
+        if [[ "$executable" == "" ]]
+        then
+            error "--executables requires a comma-separated list"
+            exit 1
+        fi
+
+        extra_executables+=("$executable")
+    done
+}
+
+found_separator=0
+while [[ "$#" -gt 0 ]]
+do
+    case "$1" in
+        --)
+            found_separator=1
+            shift
+            break
+            ;;
+        -e|--executables)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "--executables requires a comma-separated list"
+                exit 1
+            fi
+
+            add_extra_executables "$2"
+            shift 2
+            ;;
+        --executables=*)
+            add_extra_executables "${1#--executables=}"
+            shift
+            ;;
+        --*)
+            error "unknown option: $1"
+            exit 1
+            ;;
+        *)
+            error "missing -- before command"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "$found_separator" -eq 0 ]]
+then
+    error "missing -- before command"
+    exit 1
+fi
+
 app_name="${1:-}"
 
 if [[ "$app_name" == "" ]]
 then
-    error "you have to pass an app to be jailed"
+    error "missing command after --"
     exit 1
 fi
 
 shift
 
-if ! app_bin=$(type -P "${app_name}")
-then
-    error "${app_name} not found in \$PATH"
-    exit 1
-fi
+resolve_executable () {
+    executable="$1"
 
-app_path=$(realpath "${app_bin}" 2> /dev/null)
-if [[ ! -x "$app_path" ]]
-then
-    error "not an executable: ${app_path}"
-    exit 1
-fi
+    if ! executable_bin=$(type -P "$executable")
+    then
+        error "executable not found in \$PATH: $executable"
+        exit 1
+    fi
+
+    executable_path=$(realpath "$executable_bin" 2> /dev/null)
+    if [[ ! -x "$executable_path" ]]
+    then
+        error "not an executable: ${executable_path}"
+        exit 1
+    fi
+
+    printf '%s\n' "$executable_path"
+}
+
+executable_names=("$app_name" "${extra_executables[@]}")
+executable_paths=()
+
+for executable in "${executable_names[@]}"
+do
+    executable_paths+=("$(resolve_executable "$executable")")
+done
+
+app_path="${executable_paths[0]}"
 
 nix_store_package_dir () {
     path="$1"
@@ -63,27 +143,70 @@ nix_store_paths () {
 
 bw_binds=()
 nix_binds=()
+bound_dests=()
+
+add_ro_bind () {
+    src="$1"
+    dest="$2"
+
+    for bound_dest in "${bound_dests[@]}"
+    do
+        if [[ "$dest" == "$bound_dest" ]]
+        then
+            return
+        fi
+    done
+
+    bound_dests+=("$dest")
+    bw_binds+=(--ro-bind "$src" "$dest")
+}
+
+is_under_nix_bind () {
+    path="$1"
+
+    for nix_bind in "${nix_binds[@]}"
+    do
+        if [[ "$path" == "$nix_bind" || "$path" == "$nix_bind"/* ]]
+        then
+            return 0
+        fi
+    done
+
+    return 1
+}
 
 bw_args=(
     --unshare-all
-    --new-session
+    # --new-session
+    --clearenv
+    --setenv TERM "${TERM:-}"
+    --setenv PATH /bin
     --as-pid-1
     --cap-drop ALL
-    --ro-bind "$app_path" "/bin/${app_name}"
     --proc /proc
     --dev /dev
     --dir /tmp
 )
 
-while IFS= read -r path
+for i in "${!executable_names[@]}"
 do
-    nix_binds+=("$path")
-    bw_binds+=(--ro-bind "$path" "$path")
-done < <(nix_store_paths "$app_path" | sort -u)
+    executable_name="${executable_names[$i]}"
+    executable_path="${executable_paths[$i]}"
+
+    add_ro_bind "$executable_path" "/bin/${executable_name}"
+
+    while IFS= read -r path
+    do
+        nix_binds+=("$path")
+        add_ro_bind "$path" "$path"
+    done < <(nix_store_paths "$executable_path" | sort -u)
+done
 
 
 ldd_paths () {
-    ldd "${app_path}" | while read -r line
+    bin_path="$1"
+
+    { ldd "$bin_path" 2> /dev/null || true; } | while read -r line
     do
         if [[ "$line" != *"=>"* ]]
         then
@@ -105,15 +228,18 @@ ldd_paths () {
 }
 
 
-while IFS= read -r lib
+for executable_path in "${executable_paths[@]}"
 do
-    for path in "${nix_binds[@]}"
+    while IFS= read -r lib
     do
-        [[ "$lib" == "$path" || "$lib" == "$path"/* ]] && continue 2
-    done
+        if is_under_nix_bind "$lib"
+        then
+            continue
+        fi
 
-    bw_binds+=(--ro-bind "$lib" "$lib")
-done < <(ldd_paths | sort -u)
+        add_ro_bind "$lib" "$lib"
+    done < <(ldd_paths "$executable_path" | sort -u)
+done
 
 # echo "$bw_args"
 # exit

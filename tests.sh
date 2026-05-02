@@ -88,6 +88,11 @@ jtest '! ./jail -b "$PWD:$PWD:ro" -- touch "$PWD/.jail-test-touch"'
 jtest './jail -b "$PWD:$PWD:rw" -- ls "$PWD"'
 jtest './jail -b "$PWD:$PWD:rw" -- touch "$PWD/.jail-test-touch"'
 jtest '! ./jail -b "$PWD:$PWD" -- true'
+jtest './jail -B "$PWD:ro" -- ls "$PWD"'
+jtest '! ./jail -B "$PWD:ro" -- touch "$PWD/.jail-test-touch"'
+jtest './jail -B "$PWD:rw" -- touch "$PWD/.jail-test-touch"'
+jtest '! ./jail -B "$PWD" -- true'
+jtest '! ./jail -B "$PWD:bad" -- true'
 rm -f .jail-test-touch
 
 exit $status

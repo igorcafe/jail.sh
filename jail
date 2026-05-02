@@ -17,6 +17,7 @@ usage: jail [options] -- command [args...]
 options:
   -p LIST             expose extra programs in /bin (comma-separated)
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
+  -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
   -e NAME=VALUE       set an environment variable inside the jail
   --wd PATH           change working directory inside the jail
@@ -117,6 +118,21 @@ add_custom_bind () {
     fi
 
     custom_binds+=("$src" "$dest" "$mode")
+}
+
+add_same_path_bind () {
+    spec="$1"
+
+    if [[ "$spec" != *:* ]]
+    then
+        error "-B requires SRC:ro|rw"
+        exit 1
+    fi
+
+    src="${spec%:*}"
+    mode="${spec##*:}"
+
+    add_custom_bind "$src:$src:$mode"
 }
 
 add_device () {
@@ -233,6 +249,16 @@ do
             fi
 
             add_custom_bind "$2"
+            shift 2
+            ;;
+        -B)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "-B requires SRC:ro|rw"
+                exit 1
+            fi
+
+            add_same_path_bind "$2"
             shift 2
             ;;
         -d)

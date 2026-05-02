@@ -23,6 +23,7 @@ options:
   --gui               expose GUI, sound, DRI devices, and driver paths
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
+  -P NAME             persist HOME in ~/.local/share/jail.sh/home/NAME
   --wd PATH           change working directory inside the jail
   --share-wd MODE     bind current directory at same path; MODE must be ro or rw
   --home PATH         alias for -e HOME=PATH
@@ -433,6 +434,36 @@ expand_meta_args () {
                 add_gui_args
                 shift
                 ;;
+            -P)
+                if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+                then
+                    error "-P requires a profile name"
+                    exit 1
+                fi
+
+                profile_name="$2"
+                if [[ ! "$profile_name" =~ ^[A-Za-z0-9._-]+$ || "$profile_name" == *..* ]]
+                then
+                    error "-P requires a simple profile name: $profile_name"
+                    exit 1
+                fi
+
+                if [[ "${HOME:-}" == "" ]]
+                then
+                    error "-P requires HOME to be set"
+                    exit 1
+                fi
+
+                profile_host_home="$HOME/.local/share/jail.sh/home/$profile_name"
+                profile_jail_home="/home/$profile_name"
+                mkdir -p "$profile_host_home"
+
+                expanded_args+=(
+                    -b "$profile_host_home:$profile_jail_home:rw"
+                    --home "$profile_jail_home"
+                )
+                shift 2
+                ;;
             *)
                 expanded_args+=("$1")
                 shift
@@ -510,6 +541,12 @@ do
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
                 error "--home requires a value"
+                exit 1
+            fi
+
+            if [[ "$custom_home" -eq 1 ]]
+            then
+                error "--home can only be used once"
                 exit 1
             fi
 

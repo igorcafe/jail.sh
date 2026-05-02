@@ -98,6 +98,18 @@ jtest './jail --share-home rw -- touch "$HOME/.jail-test-share-home"'
 jtest '! ./jail --home /tmp --share-home ro -- true'
 rm -f "$HOME/.jail-test-share-home"
 
+jdescribe 'persistent profile home'
+profile_name="jail-test-profile-$$"
+profile_dir="$HOME/.local/share/jail.sh/home/$profile_name"
+rm -rf "$profile_dir"
+jtest './jail -P "$profile_name" -- sh -c "test \"\$HOME\" = \"/home/$profile_name\" && test \"\$PWD\" = \"/home/$profile_name\" && : > \"\$HOME/file\""'
+jtest 'test -e "$profile_dir/file"'
+jtest './jail -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
+jtest './jail --gui -P "$profile_name" -- sh -c "test \"\$HOME\" = \"/home/$profile_name\" && test \"\$XDG_CACHE_HOME\" = /tmp"'
+jtest '! ./jail -P bad/name -- true'
+jtest '! ./jail -P "$profile_name" --home /tmp -- true'
+rm -rf "$profile_dir"
+
 jdescribe 'custom binds'
 rm -f .jail-test-touch
 jtest './jail -b "$PWD:$PWD:ro" -- ls "$PWD"'

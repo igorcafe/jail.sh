@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
-set -eu
+set -u
 
 green=$'\033[1;32m'
 red=$'\033[1;31m'
 bold=$'\033[1m'
 white=$'\033[1;37m'
 reset=$'\033[0m'
+status=0
 
 jdescribe () {
     printf '\n%s%s%s\n' "$white" "$1" "$reset" >&2
@@ -27,6 +28,7 @@ jtest () {
     else
         printf '%sFAIL%s: %b\n' "$red" "$reset" "$display_command" >&2
         echo "$output" >&2
+	      status=1
         return 1
     fi
 }
@@ -74,3 +76,5 @@ jtest './jail -b "$PWD:$PWD:rw" -- ls "$PWD"'
 jtest './jail -b "$PWD:$PWD:rw" -- touch "$PWD/.jail-test-touch"'
 jtest '! ./jail -b "$PWD:$PWD" -- true'
 rm -f .jail-test-touch
+
+exit $status

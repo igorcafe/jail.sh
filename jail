@@ -15,7 +15,7 @@ usage () {
 usage: jail [options] -- command [args...]
 
 options:
-  -p LIST             expose extra programs in /bin (comma-separated)
+  -p PROGRAM          expose extra program in /bin
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
@@ -28,7 +28,7 @@ options:
 
 examples:
   jail -- emacs
-  jail -p sh,printf -- emacs -nw
+  jail -p sh -p printf -- emacs -nw
   jail -b /tmp:/host-tmp:rw -- sh
   jail --wd /tmp -- sh
   jail --share-wd rw -- sh
@@ -53,26 +53,16 @@ shared_home_directory=0
 home_directory=""
 custom_home=0
 
-add_extra_programs () {
-    list="$1"
+add_extra_program () {
+    program="$1"
 
-    if [[ "$list" == "" ]]
+    if [[ "$program" == "" ]]
     then
-        error "-p requires a comma-separated list"
+        error "-p requires a program name"
         exit 1
     fi
 
-    IFS=',' read -r -a programs <<< "$list"
-    for program in "${programs[@]}"
-    do
-        if [[ "$program" == "" ]]
-        then
-            error "-p requires a comma-separated list"
-            exit 1
-        fi
-
-        extra_programs+=("$program")
-    done
+    extra_programs+=("$program")
 }
 
 add_custom_bind () {
@@ -253,11 +243,11 @@ do
         -p)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
-                error "-p requires a comma-separated list"
+                error "-p requires a program name"
                 exit 1
             fi
 
-            add_extra_programs "$2"
+            add_extra_program "$2"
             shift 2
             ;;
         -b)

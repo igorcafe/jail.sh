@@ -48,6 +48,8 @@ jtest './jail -- bash -c "echo exit | sh"'
 
 jdescribe 'extra programs'
 jtest './jail -p printf -- sh -c "printf ok"'
+jtest './jail -p printf -p cat -- sh -c "printf ok | test \"\$(cat)\" = ok"'
+jtest '! ./jail -p printf,cat -- true'
 
 jdescribe 'devices'
 jtest './jail -- sh -c "test -e /dev/null"'

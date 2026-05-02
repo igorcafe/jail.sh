@@ -37,7 +37,7 @@ jdescribe 'command separator'
 jtest './jail -- ls'
 jtest '! ./jail -- ls "$HOME"'
 
-jdescribe 'usage and command validation'
+jdescribe 'incorrect usage'
 jtest '! ./jail'
 jtest '! ./jail ls'
 jtest '! ./jail --'

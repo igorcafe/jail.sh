@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+warn () {
+    echo -e "\033[1;33mwarning\033[0m: $@" >&2
+}
+
+error () {
+    echo -e "\033[1;31merror\033[0m: $@" >&2
+}
+
+app_name="${1:-}"
+
+if [[ "$app_name" == "" ]]
+then
+    error "you have to pass an app to be jailed"
+    exit 1
+fi
+
+shift
+
+if ! which "${app_name}" &> /dev/null
+then
+    error "${app_name} not found in \$PATH"
+    exit 1
+fi
+
+app_path=$(realpath $(which "${app_name}") 2> /dev/null)
+if [[ ! -x "$app_path" ]]
+then
+    error "not an executable: ${app_path}"
+    exit 1
+fi
+
+bw_recursive_dir () {
+    path="$1"
+    cmds=""
+    dir="$path"
+    while true
+    do
+        dir=$(dirname $dir)
+        if [[ "$dir" == "/" ]]
+        then
+            break
+        fi
+        echo "--dir $dir"
+        break
+    done
+}
+
+bw_args="\
+--unshare-all
+--new-session
+--as-pid-1
+--cap-drop ALL
+--ro-bind ${app_path} /bin/${app_name}
+--proc /proc
+--dev /dev
+--dir /tmp"
+
+bw_binds=""
+
+
+ldd_paths () {
+    ldd ${app_path} | while read -r line
+    do
+        if [[ "$line" != *"=>"* ]]
+        then
+            continue
+        fi
+        left=$(echo "$line" | awk '{print $1}')
+        right=$(echo "$line" | awk '{print $3}')
+
+        if [[ "$left" == /* ]]
+        then
+            echo "$left"
+        fi
+
+        if [[ "$right" == /* ]]
+        then
+            echo "$right"
+        fi
+    done
+}
+
+
+for lib in $(ldd_paths ${app_path})
+do
+    bw_binds="$bw_binds"$'\n'"--ro-bind $lib $lib"
+done
+
+
+bw_binds="$(echo "$bw_binds" | sort -u)"
+bw_args="\
+$bw_binds
+$bw_args"
+
+# echo "$bw_args"
+# exit
+
+bwrap $bw_args /bin/${app_name} $@

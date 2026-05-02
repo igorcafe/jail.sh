@@ -10,28 +10,75 @@ error () {
     echo -e "\033[1;31merror\033[0m: $@" >&2
 }
 
-extra_executables=()
+extra_programs=()
+custom_binds=()
 
-add_extra_executables () {
+add_extra_programs () {
     list="$1"
 
     if [[ "$list" == "" ]]
     then
-        error "--executables requires a comma-separated list"
+        error "--programs requires a comma-separated list"
         exit 1
     fi
 
-    IFS=',' read -r -a executables <<< "$list"
-    for executable in "${executables[@]}"
+    IFS=',' read -r -a programs <<< "$list"
+    for program in "${programs[@]}"
     do
-        if [[ "$executable" == "" ]]
+        if [[ "$program" == "" ]]
         then
-            error "--executables requires a comma-separated list"
+            error "--programs requires a comma-separated list"
             exit 1
         fi
 
-        extra_executables+=("$executable")
+        extra_programs+=("$program")
     done
+}
+
+add_custom_bind () {
+    spec="$1"
+
+    if [[ "$spec" != *:*:* ]]
+    then
+        error "--bind requires SRC:DEST:ro|rw"
+        exit 1
+    fi
+
+    src="${spec%%:*}"
+    rest="${spec#*:}"
+
+    if [[ "$rest" == *:ro ]]
+    then
+        mode="ro"
+        dest="${rest%:ro}"
+    elif [[ "$rest" == *:rw ]]
+    then
+        mode="rw"
+        dest="${rest%:rw}"
+    else
+        error "--bind mode must be ro or rw"
+        exit 1
+    fi
+
+    if [[ "$src" == "" || "$dest" == "" ]]
+    then
+        error "--bind requires SRC:DEST:ro|rw"
+        exit 1
+    fi
+
+    if [[ "$dest" != /* ]]
+    then
+        error "--bind destination must be absolute: $dest"
+        exit 1
+    fi
+
+    if [[ ! -e "$src" ]]
+    then
+        error "--bind source does not exist: $src"
+        exit 1
+    fi
+
+    custom_binds+=("$src" "$dest" "$mode")
 }
 
 found_separator=0
@@ -43,18 +90,32 @@ do
             shift
             break
             ;;
-        -e|--executables)
+        -p|--programs)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
-                error "--executables requires a comma-separated list"
+                error "--programs requires a comma-separated list"
                 exit 1
             fi
 
-            add_extra_executables "$2"
+            add_extra_programs "$2"
             shift 2
             ;;
-        --executables=*)
-            add_extra_executables "${1#--executables=}"
+        --programs=*)
+            add_extra_programs "${1#--programs=}"
+            shift
+            ;;
+        -b|--bind)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "--bind requires SRC:DEST:ro|rw"
+                exit 1
+            fi
+
+            add_custom_bind "$2"
+            shift 2
+            ;;
+        --bind=*)
+            add_custom_bind "${1#--bind=}"
             shift
             ;;
         --*)
@@ -103,7 +164,7 @@ resolve_executable () {
     printf '%s\n' "$executable_path"
 }
 
-executable_names=("$app_name" "${extra_executables[@]}")
+executable_names=("$app_name" "${extra_programs[@]}")
 executable_paths=()
 
 for executable in "${executable_names[@]}"
@@ -145,9 +206,17 @@ bw_binds=()
 nix_binds=()
 bound_dests=()
 
-add_ro_bind () {
-    src="$1"
-    dest="$2"
+add_bind () {
+    mode="$1"
+    src="$2"
+    dest="$3"
+
+    if [[ "$mode" == "ro" ]]
+    then
+        bind_arg="--ro-bind"
+    else
+        bind_arg="--bind"
+    fi
 
     for bound_dest in "${bound_dests[@]}"
     do
@@ -158,7 +227,7 @@ add_ro_bind () {
     done
 
     bound_dests+=("$dest")
-    bw_binds+=(--ro-bind "$src" "$dest")
+    bw_binds+=("$bind_arg" "$src" "$dest")
 }
 
 is_under_nix_bind () {
@@ -193,12 +262,12 @@ do
     executable_name="${executable_names[$i]}"
     executable_path="${executable_paths[$i]}"
 
-    add_ro_bind "$executable_path" "/bin/${executable_name}"
+    add_bind ro "$executable_path" "/bin/${executable_name}"
 
     while IFS= read -r path
     do
         nix_binds+=("$path")
-        add_ro_bind "$path" "$path"
+        add_bind ro "$path" "$path"
     done < <(nix_store_paths "$executable_path" | sort -u)
 done
 
@@ -237,8 +306,13 @@ do
             continue
         fi
 
-        add_ro_bind "$lib" "$lib"
+        add_bind ro "$lib" "$lib"
     done < <(ldd_paths "$executable_path" | sort -u)
+done
+
+for ((i = 0; i < ${#custom_binds[@]}; i += 3))
+do
+    add_bind "${custom_binds[$((i + 2))]}" "${custom_binds[$i]}" "${custom_binds[$((i + 1))]}"
 done
 
 # echo "$bw_args"

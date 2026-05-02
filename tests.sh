@@ -58,6 +58,7 @@ jtest './jail -- sh -c "test -e /dev/random"'
 jtest './jail -- sh -c "test -e /dev/urandom"'
 jtest './jail -- sh -c "test -e /dev/tty"'
 jtest './jail -- sh -c "test -d /dev/shm && : > /dev/shm/jail-test-shm"'
+jtest './jail -- sh -c "test -e /dev/fd/0 && test -e /dev/stdin && test -e /dev/stdout && test -e /dev/stderr"'
 jtest './jail -d null -- sh -c "test -e /dev/null"'
 jtest './jail -d null -d null -- sh -c "test -e /dev/null"'
 jtest "script -qefc './jail -- sh -c \"test -t 0 && : < /dev/tty\"' /dev/null"

@@ -46,6 +46,7 @@ fi
 extra_programs=()
 custom_binds=()
 custom_devices=()
+default_devices=(null zero random urandom tty)
 custom_env=()
 working_directory=""
 shared_working_directory=0
@@ -515,7 +516,6 @@ is_under_nix_bind () {
 
 bw_args=(
     --unshare-all
-    --new-session
     --clearenv
     --setenv TERM "${TERM:-}"
     --setenv PATH /bin
@@ -526,7 +526,10 @@ bw_args=(
     --chdir "$working_directory"
 )
 
-add_dev_bind null
+for device in "${default_devices[@]}"
+do
+    add_dev_bind "$device"
+done
 
 for device in "${custom_devices[@]}"
 do
@@ -599,4 +602,32 @@ done
 # echo "$bw_args"
 # exit
 
+restore_tty=0
+tty_state=""
+
+restore_tty_state () {
+    if [[ "$restore_tty" -eq 1 ]]
+    then
+        stty "$tty_state" 2> /dev/null || true
+    fi
+}
+
+if [[ -t 0 ]]
+then
+    tty_state=$(stty -g 2> /dev/null || true)
+
+    if [[ "$tty_state" != "" ]]
+    then
+        restore_tty=1
+        trap restore_tty_state EXIT
+    fi
+fi
+
+set +e
 bwrap "${bw_binds[@]}" "${bw_args[@]}" "/bin/${app_name}" "$@"
+status=$?
+set -e
+
+restore_tty_state
+trap - EXIT
+exit "$status"

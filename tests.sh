@@ -53,8 +53,17 @@ jtest '! ./jail -p printf,cat -- true'
 
 jdescribe 'devices'
 jtest './jail -- sh -c "test -e /dev/null"'
+jtest './jail -- sh -c "test -e /dev/zero"'
+jtest './jail -- sh -c "test -e /dev/random"'
+jtest './jail -- sh -c "test -e /dev/urandom"'
+jtest './jail -- sh -c "test -e /dev/tty"'
 jtest './jail -d null -- sh -c "test -e /dev/null"'
 jtest './jail -d null -d null -- sh -c "test -e /dev/null"'
+if command -v script > /dev/null
+then
+    jtest "script -qefc './jail -- sh -c \"test -t 0 && : < /dev/tty\"' /dev/null"
+    jtest "script -qefc 'before=\$(stty -g); ./jail -- stty raw -echo; test \"\$(stty -g)\" = \"\$before\"' /dev/null"
+fi
 jtest '! ./jail -d /dev/null -- true'
 jtest '! ./jail -d ../null -- true'
 jtest '! ./jail -d jail-does-not-exist -- true'

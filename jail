@@ -21,6 +21,7 @@ options:
   --wd PATH           change working directory inside the jail
   --share-wd MODE     bind current directory at same path; MODE must be ro or rw
   --home PATH         alias for -e HOME=PATH
+  --share-home MODE   bind user's HOME into the jail and set HOME; MODE must be ro or rw
 
 examples:
   jail -- emacs
@@ -29,6 +30,7 @@ examples:
   jail --wd /tmp -- sh
   jail --share-wd rw -- sh
   jail --home /tmp -- emacs -nw
+  jail --share-home ro -- emacs -nw
 EOF
 }
 
@@ -43,6 +45,8 @@ custom_binds=()
 custom_env=()
 working_directory=""
 shared_working_directory=0
+shared_home_directory=0
+custom_home=0
 
 add_extra_programs () {
     list="$1"
@@ -126,6 +130,27 @@ add_working_directory_bind () {
     custom_binds+=("$wd" "$wd" "$mode")
 }
 
+add_home_directory_bind () {
+    mode="$1"
+
+    if [[ "$mode" != "ro" && "$mode" != "rw" ]]
+    then
+        error "--share-home mode must be ro or rw"
+        exit 1
+    fi
+
+    home="${HOME:-}"
+    if [[ "$home" == "" ]]
+    then
+        error "--share-home requires HOME to be set"
+        exit 1
+    fi
+
+    shared_home_directory=1
+    custom_binds+=("$home" "$home" "$mode")
+    custom_env+=(HOME "$home")
+}
+
 add_custom_env () {
     spec="$1"
 
@@ -193,7 +218,18 @@ do
                 exit 1
             fi
 
+            custom_home=1
             add_custom_env "HOME=$2"
+            shift 2
+            ;;
+        --share-home)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "--share-home requires ro or rw"
+                exit 1
+            fi
+
+            add_home_directory_bind "$2"
             shift 2
             ;;
         --share-wd)
@@ -242,6 +278,12 @@ fi
 if [[ "$working_directory" != "" && "$shared_working_directory" -eq 1 ]]
 then
     error "--wd and --share-wd cannot be used together"
+    exit 1
+fi
+
+if [[ "$custom_home" -eq 1 && "$shared_home_directory" -eq 1 ]]
+then
+    error "--home and --share-home cannot be used together"
     exit 1
 fi
 

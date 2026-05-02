@@ -59,6 +59,12 @@ jtest '! ./jail --share-wd bad -- true'
 jdescribe 'environment'
 jtest './jail -e FOO=bar -- sh -c "test \"\$FOO\" = bar"'
 jtest './jail --home /tmp -- sh -c "test \"\$HOME\" = /tmp"'
+jtest './jail --share-home ro -- sh -c "test \"\$HOME\" = \"$HOME\""'
+jtest './jail --share-home ro -- ls "$HOME"'
+jtest '! ./jail --share-home ro -- touch "$HOME/.jail-test-share-home"'
+jtest './jail --share-home rw -- touch "$HOME/.jail-test-share-home"'
+jtest '! ./jail --home /tmp --share-home ro -- true'
+rm -f "$HOME/.jail-test-share-home"
 
 jdescribe 'custom binds'
 rm -f .jail-test-touch

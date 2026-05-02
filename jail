@@ -57,6 +57,16 @@ shared_working_directory=0
 shared_home_directory=0
 home_directory=""
 custom_home=0
+jail_runtime_dir=""
+
+cleanup_runtime_dir () {
+    if [[ "$jail_runtime_dir" != "" ]]
+    then
+        rm -rf "$jail_runtime_dir"
+    fi
+}
+
+trap cleanup_runtime_dir EXIT
 
 for name in LANG LANGUAGE LC_ALL LC_ADDRESS LC_COLLATE LC_CTYPE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE LC_TIME LOCALE_ARCHIVE
 do
@@ -718,6 +728,28 @@ add_dev_bind () {
     bw_binds+=(--dev-bind "$src" "$dest")
 }
 
+add_user_database_binds () {
+    jail_runtime_dir=$(mktemp -d)
+
+    uid=$(id -u)
+    gid=$(id -g)
+    user="${USER:-user}"
+    group="$user"
+    effective_home="${home_directory:-/}"
+
+    user="${user//:/_}"
+    group="${group//:/_}"
+
+    printf '%s:x:%s:%s:%s:%s:/bin/sh\n' "$user" "$uid" "$gid" "$user" "$effective_home" > "$jail_runtime_dir/passwd"
+    printf '%s:x:%s:%s\n' "$group" "$gid" "$user" > "$jail_runtime_dir/group"
+    printf 'passwd: files\ngroup: files\nshadow: files\nhosts: files dns\n' > "$jail_runtime_dir/nsswitch.conf"
+
+    bw_binds+=(--dir /etc)
+    add_bind ro "$jail_runtime_dir/passwd" /etc/passwd
+    add_bind ro "$jail_runtime_dir/group" /etc/group
+    add_bind ro "$jail_runtime_dir/nsswitch.conf" /etc/nsswitch.conf
+}
+
 is_under_nix_bind () {
     path="$1"
 
@@ -780,6 +812,7 @@ do
     add_dev_bind "$device"
 done
 
+add_user_database_binds
 add_locale_binds
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
@@ -858,6 +891,13 @@ restore_tty_state () {
     fi
 }
 
+cleanup () {
+    restore_tty_state
+    cleanup_runtime_dir
+}
+
+trap cleanup EXIT
+
 if [[ -t 0 ]]
 then
     tty_state=$(stty -g 2> /dev/null || true)
@@ -865,7 +905,6 @@ then
     if [[ "$tty_state" != "" ]]
     then
         restore_tty=1
-        trap restore_tty_state EXIT
     fi
 fi
 
@@ -874,6 +913,6 @@ bwrap "${bw_binds[@]}" "${bw_args[@]}" "/bin/${app_name}" "$@"
 status=$?
 set -e
 
-restore_tty_state
+cleanup
 trap - EXIT
 exit "$status"

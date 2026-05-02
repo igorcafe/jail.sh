@@ -24,6 +24,7 @@ options:
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
   -P NAME             persist HOME in ~/.local/share/jail.sh/home/NAME
+  --net               allow access to the host network namespace
   --wd PATH           change working directory inside the jail
   --share-wd MODE     bind current directory at same path; MODE must be ro or rw
   --home PATH         alias for -e HOME=PATH
@@ -57,6 +58,7 @@ shared_working_directory=0
 shared_home_directory=0
 home_directory=""
 custom_home=0
+share_network=0
 jail_runtime_dir=""
 
 cleanup_runtime_dir () {
@@ -568,6 +570,10 @@ do
             add_custom_env "HOME=$2"
             shift 2
             ;;
+        --net)
+            share_network=1
+            shift
+            ;;
         --share-home)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
@@ -750,6 +756,16 @@ add_user_database_binds () {
     add_bind ro "$jail_runtime_dir/nsswitch.conf" /etc/nsswitch.conf
 }
 
+add_network_binds () {
+    for path in /etc/hosts /etc/resolv.conf
+    do
+        if [[ -e "$path" ]]
+        then
+            add_bind ro "$path" "$path"
+        fi
+    done
+}
+
 is_under_nix_bind () {
     path="$1"
 
@@ -802,6 +818,11 @@ bw_args=(
     --chdir "$working_directory"
 )
 
+if [[ "$share_network" -eq 1 ]]
+then
+    bw_args+=(--share-net)
+fi
+
 for device in "${default_devices[@]}"
 do
     add_dev_bind "$device"
@@ -814,6 +835,11 @@ done
 
 add_user_database_binds
 add_locale_binds
+
+if [[ "$share_network" -eq 1 ]]
+then
+    add_network_binds
+fi
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
 do

@@ -70,6 +70,15 @@ jtest './jail -d! jail-does-not-exist -- true'
 jtest '! ./jail -d! ../null -- true'
 jtest './jail --gui -- sh -c "test -e /dev/snd && test -e /dev/dri && test \"\$XDG_RUNTIME_DIR\" = \"$XDG_RUNTIME_DIR\""'
 
+jdescribe 'network'
+host_net_namespace="$(readlink /proc/self/ns/net)"
+jtest '! ./jail -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c "test \"\$(readlink /proc/self/ns/net)\" = \"\$HOST_NET_NAMESPACE\""'
+jtest './jail --net -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c "test \"\$(readlink /proc/self/ns/net)\" = \"\$HOST_NET_NAMESPACE\""'
+if [[ -e /etc/resolv.conf ]]
+then
+    jtest './jail --net -- sh -c "test -r /etc/resolv.conf"'
+fi
+
 jdescribe 'working directory bind shortcut'
 jtest './jail --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'
 jtest '! ./jail --wd tmp -- true'

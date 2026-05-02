@@ -114,6 +114,14 @@ jtest './jail -B! "/jail-test-does-not-exist:ro" -- true'
 jtest '! ./jail -B "$PWD" -- true'
 jtest '! ./jail -B "$PWD:bad" -- true'
 jtest '! ./jail -B! "$PWD:bad" -- true'
+rm -rf .jail-test-link .jail-test-link-dir .jail-test-link-target
+mkdir .jail-test-link-target .jail-test-link-dir
+touch .jail-test-link-target/file
+ln -s .jail-test-link-target .jail-test-link
+ln -s "$PWD/.jail-test-link-target" .jail-test-link-dir/target
+jtest './jail -B "$PWD/.jail-test-link:ro" -- sh -c "test -e \"$PWD/.jail-test-link/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
+jtest './jail -B "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
+rm -rf .jail-test-link .jail-test-link-dir .jail-test-link-target
 rm -f .jail-test-touch
 
 exit $status

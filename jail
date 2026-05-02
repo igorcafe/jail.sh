@@ -251,79 +251,79 @@ nix_store_paths () {
     printf '%s\n' "$package_dir"
 }
 
-sound_alsa_config_paths () {
-    for config_dir in /etc/alsa/conf.d /etc/static/alsa/conf.d
-    do
-        if [[ ! -d "$config_dir" ]]
-        then
-            continue
-        fi
-
-        for config in "$config_dir"/*
-        do
-            if [[ ! -e "$config" ]]
-            then
-                continue
-            fi
-
-            real_config=$(realpath "$config" 2> /dev/null || true)
-            if [[ "$real_config" != "" && -e "$real_config" ]]
-            then
-                printf '%s\n' "$real_config"
-
-                grep -Eo '/nix/store/[^ ;"]+' "$real_config" 2> /dev/null || true
-            fi
-        done
-    done
-}
-
-font_config_paths () {
-    for config_dir in /etc/fonts/conf.d /etc/static/fonts/conf.d
-    do
-        if [[ ! -d "$config_dir" ]]
-        then
-            continue
-        fi
-
-        for config in "$config_dir"/*
-        do
-            if [[ ! -e "$config" ]]
-            then
-                continue
-            fi
-
-            real_config=$(realpath "$config" 2> /dev/null || true)
-            if [[ "$real_config" != "" && -e "$real_config" ]]
-            then
-                printf '%s\n' "$real_config"
-
-                grep -Eo '/nix/store/[^ ;"]+' "$real_config" 2> /dev/null || true
-            fi
-        done
-    done
-
-    for config in /etc/fonts/fonts.conf /etc/static/fonts/fonts.conf
-    do
-        if [[ ! -e "$config" ]]
-        then
-            continue
-        fi
-
-        real_config=$(realpath "$config" 2> /dev/null || true)
-        if [[ "$real_config" != "" && -e "$real_config" ]]
-        then
-            printf '%s\n' "$real_config"
-        fi
-    done
-}
-
 add_nix_store_bind_args () {
     path="$1"
 
     while IFS= read -r nix_path
     do
-        expanded_args+=(-B! "$nix_path:ro")
+        expanded_args+=(-b! "$nix_path:$nix_path:ro")
     done < <(nix_store_paths "$path" | sort -u)
+}
+
+add_bind_dependency_args () {
+    target="$1"
+
+    if [[ "$target" == "" || "$target" == *:* || ! -e "$target" ]]
+    then
+        return
+    fi
+
+    expanded_args+=(-b! "$target:$target:ro")
+
+    if [[ -d "$target" ]]
+    then
+        add_nix_store_bind_args "$target"
+    fi
+}
+
+symlink_target () {
+    link="$1"
+    target=$(readlink "$link" 2> /dev/null || true)
+
+    if [[ "$target" == "" ]]
+    then
+        return
+    fi
+
+    if [[ "$target" == /* ]]
+    then
+        printf '%s\n' "$target"
+    else
+        printf '%s/%s\n' "$(dirname "$link")" "$target"
+    fi
+}
+
+should_scan_bind_links () {
+    src="$1"
+
+    case "$src" in
+        /dev|/dev/*|/proc|/proc/*|/run|/run/*|/sys|/sys/*)
+            return 1
+            ;;
+    esac
+
+    return 0
+}
+
+add_bind_link_dependencies () {
+    src="$1"
+
+    if [[ -L "$src" ]]
+    then
+        target=$(symlink_target "$src")
+        add_bind_dependency_args "$target"
+    fi
+
+    if [[ ! -d "$src" || -L "$src" ]] || ! should_scan_bind_links "$src"
+    then
+        return
+    fi
+
+    while IFS= read -r link
+    do
+        target=$(symlink_target "$link")
+        add_bind_dependency_args "$target"
+    done < <(find "$src" -type l 2> /dev/null || true)
 }
 
 add_gui_args () {
@@ -348,27 +348,6 @@ add_gui_args () {
         -B! "${XAUTHORITY:-}:ro"
     )
 
-    while IFS= read -r path
-    do
-        if [[ -e "$path" ]]
-        then
-            add_nix_store_bind_args "$path"
-        fi
-    done < <({ sound_alsa_config_paths; font_config_paths; } | sort -u)
-
-    for driver_dir in /run/opengl-driver /run/opengl-driver-32
-    do
-        if [[ ! -e "$driver_dir" ]]
-        then
-            continue
-        fi
-
-        real_driver_dir=$(realpath "$driver_dir" 2> /dev/null || true)
-        if [[ "$real_driver_dir" != "" && -e "$real_driver_dir" ]]
-        then
-            add_nix_store_bind_args "$real_driver_dir"
-        fi
-    done
 }
 
 expand_meta_args () {
@@ -412,6 +391,17 @@ expand_meta_args () {
                 fi
 
                 expanded_args+=("$bind_arg" "$src:$src:$mode")
+
+                if [[ -e "$src" ]]
+                then
+                    add_bind_link_dependencies "$src"
+
+                    if [[ -d "$src" ]]
+                    then
+                        add_nix_store_bind_args "$src"
+                    fi
+                fi
+
                 shift 2
                 ;;
             -E|-E!)

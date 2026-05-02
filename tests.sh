@@ -48,7 +48,9 @@ jtest './jail -p printf -- sh -c "printf ok"'
 
 jdescribe 'working directory bind shortcut'
 jtest './jail --wd ro -- ls "$PWD"'
+jtest '! ./jail --wd ro -- touch "$PWD"'
 jtest './jail --wd rw -- ls "$PWD"'
+jtest './jail --wd rw -- touch "$PWD"'
 jtest '! ./jail --wd bad -- true'
 
 jdescribe 'environment'

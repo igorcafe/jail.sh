@@ -19,6 +19,7 @@ options:
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
+  -b!, -B!, -d!, -E!  optional variants that ignore missing host resources
   --gui               expose GUI, sound, DRI devices, and driver paths
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
@@ -79,6 +80,7 @@ add_extra_program () {
 
 add_custom_bind () {
     spec="$1"
+    optional_missing="${2:-0}"
 
     if [[ "$spec" != *:*:* ]]
     then
@@ -116,6 +118,11 @@ add_custom_bind () {
 
     if [[ ! -e "$src" ]]
     then
+        if [[ "$optional_missing" -eq 1 ]]
+        then
+            return
+        fi
+
         error "-b source does not exist: $src"
         exit 1
     fi
@@ -125,6 +132,7 @@ add_custom_bind () {
 
 add_same_path_bind () {
     spec="$1"
+    optional_missing="${2:-0}"
 
     if [[ "$spec" != *:* ]]
     then
@@ -135,11 +143,12 @@ add_same_path_bind () {
     src="${spec%:*}"
     mode="${spec##*:}"
 
-    add_custom_bind "$src:$src:$mode"
+    add_custom_bind "$src:$src:$mode" "$optional_missing"
 }
 
 add_device () {
     device="$1"
+    optional_missing="${2:-0}"
 
     if [[ "$device" == "" ]]
     then
@@ -161,6 +170,11 @@ add_device () {
 
     if [[ ! -e "/dev/$device" ]]
     then
+        if [[ "$optional_missing" -eq 1 ]]
+        then
+            return
+        fi
+
         error "-d device does not exist: /dev/$device"
         exit 1
     fi
@@ -228,6 +242,7 @@ add_custom_env () {
 
 add_host_env () {
     name="$1"
+    optional_missing="${2:-0}"
 
     if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
     then
@@ -237,6 +252,11 @@ add_host_env () {
 
     if [[ ! -v "$name" ]]
     then
+        if [[ "$optional_missing" -eq 1 ]]
+        then
+            return
+        fi
+
         error "-E environment variable is not set: $name"
         exit 1
     fi
@@ -249,7 +269,7 @@ add_optional_host_env () {
 
     if [[ -v "$name" ]]
     then
-        add_host_env "$name"
+        add_host_env "$name" 1
     fi
 }
 
@@ -272,34 +292,52 @@ do
             add_extra_program "$2"
             shift 2
             ;;
-        -b)
+        -b|-b!)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
                 error "-b requires SRC:DEST:ro|rw"
                 exit 1
             fi
 
-            add_custom_bind "$2"
+            optional_missing=0
+            if [[ "$1" == -b! ]]
+            then
+                optional_missing=1
+            fi
+
+            add_custom_bind "$2" "$optional_missing"
             shift 2
             ;;
-        -B)
+        -B|-B!)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
                 error "-B requires SRC:ro|rw"
                 exit 1
             fi
 
-            add_same_path_bind "$2"
+            optional_missing=0
+            if [[ "$1" == -B! ]]
+            then
+                optional_missing=1
+            fi
+
+            add_same_path_bind "$2" "$optional_missing"
             shift 2
             ;;
-        -d)
+        -d|-d!)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
                 error "-d requires a device name"
                 exit 1
             fi
 
-            add_device "$2"
+            optional_missing=0
+            if [[ "$1" == -d! ]]
+            then
+                optional_missing=1
+            fi
+
+            add_device "$2" "$optional_missing"
             shift 2
             ;;
         --gui)
@@ -336,14 +374,20 @@ do
             add_custom_env "$2"
             shift 2
             ;;
-        -E)
+        -E|-E!)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
                 error "-E requires an environment variable name"
                 exit 1
             fi
 
-            add_host_env "$2"
+            optional_missing=0
+            if [[ "$1" == -E! ]]
+            then
+                optional_missing=1
+            fi
+
+            add_host_env "$2" "$optional_missing"
             shift 2
             ;;
         --home)

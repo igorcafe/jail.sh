@@ -759,6 +759,7 @@ bw_args=(
     --cap-drop ALL
     --proc /proc
     --dir /tmp
+    --tmpfs /dev/shm
     --chdir "$working_directory"
 )
 

@@ -247,7 +247,7 @@ resolve_executable () {
     printf '%s\n' "$executable_path"
 }
 
-executable_names=("$app_name" "${extra_programs[@]}")
+executable_names=("$app_name" sh "${extra_programs[@]}")
 executable_paths=()
 
 for executable in "${executable_names[@]}"

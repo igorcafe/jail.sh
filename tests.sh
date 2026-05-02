@@ -33,6 +33,9 @@ jtest '! ./jail'
 jtest '! ./jail ls'
 jtest '! ./jail --'
 
+jdescribe 'builtin sh'
+jtest './jail -- bash -c "echo exit | sh"'
+
 jdescribe 'extra programs'
 jtest './jail -p printf -- sh -c "printf ok"'
 jtest './jail --programs printf -- sh -c "printf ok"'

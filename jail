@@ -18,6 +18,7 @@ options:
   -p LIST             expose extra programs in /bin (comma-separated)
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -e NAME=VALUE       set an environment variable inside the jail
+  --wd PATH           change working directory inside the jail
   --share-wd MODE     bind current directory at same path; MODE must be ro or rw
   --home PATH         alias for -e HOME=PATH
 
@@ -25,6 +26,7 @@ examples:
   jail -- emacs
   jail -p sh,printf -- emacs -nw
   jail -b /tmp:/host-tmp:rw -- sh
+  jail --wd /tmp -- sh
   jail --share-wd rw -- sh
   jail --home /tmp -- emacs -nw
 EOF
@@ -39,6 +41,8 @@ fi
 extra_programs=()
 custom_binds=()
 custom_env=()
+working_directory=""
+shared_working_directory=0
 
 add_extra_programs () {
     list="$1"
@@ -118,6 +122,7 @@ add_working_directory_bind () {
     fi
 
     wd="$(pwd)"
+    shared_working_directory=1
     custom_binds+=("$wd" "$wd" "$mode")
 }
 
@@ -201,6 +206,22 @@ do
             add_working_directory_bind "$2"
             shift 2
             ;;
+        --wd)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "--wd requires a path"
+                exit 1
+            fi
+
+            if [[ "$2" != /* ]]
+            then
+                error "--wd path must be absolute: $2"
+                exit 1
+            fi
+
+            working_directory="$2"
+            shift 2
+            ;;
         --*)
             error "unknown option: $1"
             exit 1
@@ -215,6 +236,12 @@ done
 if [[ "$found_separator" -eq 0 ]]
 then
     error "missing -- before command"
+    exit 1
+fi
+
+if [[ "$working_directory" != "" && "$shared_working_directory" -eq 1 ]]
+then
+    error "--wd and --share-wd cannot be used together"
     exit 1
 fi
 
@@ -338,6 +365,11 @@ bw_args=(
     --proc /proc
     --dir /tmp
 )
+
+if [[ "$working_directory" != "" ]]
+then
+    bw_args+=(--chdir "$working_directory")
+fi
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
 do

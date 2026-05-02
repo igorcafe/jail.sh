@@ -19,7 +19,7 @@ options:
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
-  --sound             expose sound devices and runtime/config paths
+  --gui               expose GUI, sound, DRI devices, and driver paths
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
   --wd PATH           change working directory inside the jail
@@ -53,9 +53,17 @@ working_directory=""
 custom_working_directory=0
 shared_working_directory=0
 shared_home_directory=0
-sound_enabled=0
+gui_enabled=0
 home_directory=""
 custom_home=0
+
+for name in LANG LANGUAGE LC_ALL LC_ADDRESS LC_COLLATE LC_CTYPE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE LC_TIME LOCALE_ARCHIVE
+do
+    if [[ -v "$name" ]]
+    then
+        custom_env+=("$name" "${!name}")
+    fi
+done
 
 add_extra_program () {
     program="$1"
@@ -236,6 +244,15 @@ add_host_env () {
     add_custom_env "$name=${!name}"
 }
 
+add_optional_host_env () {
+    name="$1"
+
+    if [[ -v "$name" ]]
+    then
+        add_host_env "$name"
+    fi
+}
+
 found_separator=0
 while [[ "$#" -gt 0 ]]
 do
@@ -285,10 +302,28 @@ do
             add_device "$2"
             shift 2
             ;;
-        --sound)
-            sound_enabled=1
+        --gui)
+            gui_enabled=1
             add_device snd
-            add_host_env XDG_RUNTIME_DIR
+            add_device dri
+            add_custom_env XDG_CACHE_HOME=/tmp
+
+            for name in XDG_RUNTIME_DIR DISPLAY WAYLAND_DISPLAY
+            do
+                add_optional_host_env "$name"
+            done
+
+            if [[ -v XAUTHORITY && -e "$XAUTHORITY" ]]
+            then
+                add_host_env XAUTHORITY
+                custom_binds+=("$XAUTHORITY" "$XAUTHORITY" ro)
+            fi
+
+            if [[ -d /tmp/.X11-unix ]]
+            then
+                custom_binds+=(/tmp/.X11-unix /tmp/.X11-unix rw)
+            fi
+
             shift
             ;;
         -e)
@@ -551,8 +586,72 @@ sound_alsa_config_paths () {
     done
 }
 
-add_sound_binds () {
-    add_bind rw "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+font_config_paths () {
+    for config_dir in /etc/fonts/conf.d /etc/static/fonts/conf.d
+    do
+        if [[ ! -d "$config_dir" ]]
+        then
+            continue
+        fi
+
+        for config in "$config_dir"/*
+        do
+            if [[ ! -e "$config" ]]
+            then
+                continue
+            fi
+
+            real_config=$(realpath "$config" 2> /dev/null || true)
+            if [[ "$real_config" != "" && -e "$real_config" ]]
+            then
+                printf '%s\n' "$real_config"
+
+                grep -Eo '/nix/store/[^ ;"]+' "$real_config" 2> /dev/null || true
+            fi
+        done
+    done
+
+    for config in /etc/fonts/fonts.conf /etc/static/fonts/fonts.conf
+    do
+        if [[ ! -e "$config" ]]
+        then
+            continue
+        fi
+
+        real_config=$(realpath "$config" 2> /dev/null || true)
+        if [[ "$real_config" != "" && -e "$real_config" ]]
+        then
+            printf '%s\n' "$real_config"
+        fi
+    done
+}
+
+add_locale_binds () {
+    if [[ ! -v LOCALE_ARCHIVE || ! -e "$LOCALE_ARCHIVE" ]]
+    then
+        return
+    fi
+
+    add_bind ro "$LOCALE_ARCHIVE" "$LOCALE_ARCHIVE"
+
+    real_locale_archive=$(realpath "$LOCALE_ARCHIVE" 2> /dev/null || true)
+    if [[ "$real_locale_archive" == "" || ! -e "$real_locale_archive" ]]
+    then
+        return
+    fi
+
+    while IFS= read -r nix_path
+    do
+        nix_binds+=("$nix_path")
+        add_bind ro "$nix_path" "$nix_path"
+    done < <(nix_store_paths "$real_locale_archive" | sort -u)
+}
+
+add_gui_binds () {
+    if [[ -v XDG_RUNTIME_DIR && -d "$XDG_RUNTIME_DIR" ]]
+    then
+        add_bind rw "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+    fi
 
     for path in /etc/alsa /etc/static/alsa
     do
@@ -575,6 +674,79 @@ add_sound_binds () {
             add_bind ro "$nix_path" "$nix_path"
         done < <(nix_store_paths "$path" | sort -u)
     done < <(sound_alsa_config_paths | sort -u)
+
+    for path in /etc/fonts /etc/static/fonts
+    do
+        if [[ -e "$path" ]]
+        then
+            add_bind ro "$path" "$path"
+        fi
+    done
+
+    while IFS= read -r path
+    do
+        if [[ ! -e "$path" ]]
+        then
+            continue
+        fi
+
+        while IFS= read -r nix_path
+        do
+            nix_binds+=("$nix_path")
+            add_bind ro "$nix_path" "$nix_path"
+        done < <(nix_store_paths "$path" | sort -u)
+    done < <(font_config_paths | sort -u)
+
+    if [[ -d /sys/dev/char ]]
+    then
+        add_bind ro /sys/dev/char /sys/dev/char
+    fi
+
+    for dri_node in /dev/dri/*
+    do
+        if [[ ! -e "$dri_node" ]]
+        then
+            continue
+        fi
+
+        device_id=$(stat -c '%t:%T' "$dri_node" 2> /dev/null || true)
+        if [[ "$device_id" != *:* ]]
+        then
+            continue
+        fi
+
+        major_hex="${device_id%:*}"
+        minor_hex="${device_id#*:}"
+        sys_device="/sys/dev/char/$((16#$major_hex)):$((16#$minor_hex))/device"
+        real_sys_device=$(realpath "$sys_device" 2> /dev/null || true)
+
+        if [[ "$real_sys_device" != "" && -e "$real_sys_device" ]]
+        then
+            add_bind ro "$real_sys_device" "$real_sys_device"
+        fi
+    done
+
+    for driver_dir in /run/opengl-driver /run/opengl-driver-32
+    do
+        if [[ ! -e "$driver_dir" ]]
+        then
+            continue
+        fi
+
+        add_bind ro "$driver_dir" "$driver_dir"
+
+        real_driver_dir=$(realpath "$driver_dir" 2> /dev/null || true)
+        if [[ "$real_driver_dir" == "" ]]
+        then
+            continue
+        fi
+
+        while IFS= read -r nix_path
+        do
+            nix_binds+=("$nix_path")
+            add_bind ro "$nix_path" "$nix_path"
+        done < <(nix_store_paths "$real_driver_dir" | sort -u)
+    done
 }
 
 bw_args=(
@@ -599,9 +771,11 @@ do
     add_dev_bind "$device"
 done
 
-if [[ "$sound_enabled" -eq 1 ]]
+add_locale_binds
+
+if [[ "$gui_enabled" -eq 1 ]]
 then
-    add_sound_binds
+    add_gui_binds
 fi
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))

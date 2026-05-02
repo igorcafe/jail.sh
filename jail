@@ -332,17 +332,20 @@ add_gui_args () {
         -d! snd
         -d! dri
         -e XDG_CACHE_HOME=/tmp
+        -E! DBUS_SESSION_BUS_ADDRESS
         -E! XDG_RUNTIME_DIR
         -E! DISPLAY
         -E! WAYLAND_DISPLAY
         -E! XAUTHORITY
         -B! /tmp/.X11-unix:rw
+        -B! /run/dbus/system_bus_socket:ro
         -B! /sys/dev:ro
         -B! /sys/devices:ro
         -B! /etc/alsa:ro
         -B! /etc/static/alsa:ro
         -B! /etc/fonts:ro
         -B! /etc/static/fonts:ro
+        -B! /etc/machine-id:ro
         -B! /run/opengl-driver:ro
         -B! /run/opengl-driver-32:ro
         -B! "${XDG_RUNTIME_DIR:-}:rw"

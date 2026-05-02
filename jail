@@ -20,50 +20,70 @@ fi
 
 shift
 
-if ! which "${app_name}" &> /dev/null
+if ! app_bin=$(type -P "${app_name}")
 then
     error "${app_name} not found in \$PATH"
     exit 1
 fi
 
-app_path=$(realpath $(which "${app_name}") 2> /dev/null)
+app_path=$(realpath "${app_bin}" 2> /dev/null)
 if [[ ! -x "$app_path" ]]
 then
     error "not an executable: ${app_path}"
     exit 1
 fi
 
-bw_recursive_dir () {
+nix_store_package_dir () {
     path="$1"
-    cmds=""
-    dir="$path"
-    while true
-    do
-        dir=$(dirname $dir)
-        if [[ "$dir" == "/" ]]
-        then
-            break
-        fi
-        echo "--dir $dir"
-        break
-    done
+
+    if [[ "$path" != /nix/store/*/* ]]
+    then
+        return
+    fi
+
+    rest="${path#/nix/store/}"
+    printf '/nix/store/%s\n' "${rest%%/*}"
 }
 
-bw_args="\
---unshare-all
---new-session
---as-pid-1
---cap-drop ALL
---ro-bind ${app_path} /bin/${app_name}
---proc /proc
---dev /dev
---dir /tmp"
+nix_store_paths () {
+    package_dir=$(nix_store_package_dir "$1")
 
-bw_binds=""
+    if [[ "$package_dir" == "" ]]
+    then
+        return
+    fi
+
+    if command -v nix-store > /dev/null && nix-store -qR "$package_dir" 2> /dev/null
+    then
+        return
+    fi
+
+    printf '%s\n' "$package_dir"
+}
+
+bw_binds=()
+nix_binds=()
+
+bw_args=(
+    --unshare-all
+    --new-session
+    --as-pid-1
+    --cap-drop ALL
+    --ro-bind "$app_path" "/bin/${app_name}"
+    --proc /proc
+    --dev /dev
+    --dir /tmp
+)
+
+while IFS= read -r path
+do
+    nix_binds+=("$path")
+    bw_binds+=(--ro-bind "$path" "$path")
+done < <(nix_store_paths "$app_path" | sort -u)
 
 
 ldd_paths () {
-    ldd ${app_path} | while read -r line
+    ldd "${app_path}" | while read -r line
     do
         if [[ "$line" != *"=>"* ]]
         then
@@ -85,18 +105,17 @@ ldd_paths () {
 }
 
 
-for lib in $(ldd_paths ${app_path})
+while IFS= read -r lib
 do
-    bw_binds="$bw_binds"$'\n'"--ro-bind $lib $lib"
-done
+    for path in "${nix_binds[@]}"
+    do
+        [[ "$lib" == "$path" || "$lib" == "$path"/* ]] && continue 2
+    done
 
-
-bw_binds="$(echo "$bw_binds" | sort -u)"
-bw_args="\
-$bw_binds
-$bw_args"
+    bw_binds+=(--ro-bind "$lib" "$lib")
+done < <(ldd_paths | sort -u)
 
 # echo "$bw_args"
 # exit
 
-bwrap $bw_args /bin/${app_name} $@
+bwrap "${bw_binds[@]}" "${bw_args[@]}" "/bin/${app_name}" "$@"

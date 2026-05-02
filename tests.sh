@@ -38,7 +38,6 @@ jtest './jail -- bash -c "echo exit | sh"'
 
 jdescribe 'extra programs'
 jtest './jail -p printf -- sh -c "printf ok"'
-jtest './jail --programs printf -- sh -c "printf ok"'
 
 jdescribe 'working directory bind shortcut'
 jtest './jail --wd ro -- ls "$PWD"'
@@ -53,7 +52,7 @@ jdescribe 'custom binds'
 rm -f .jail-test-touch
 jtest './jail -b "$PWD:$PWD:ro" -- ls "$PWD"'
 jtest '! ./jail -b "$PWD:$PWD:ro" -- touch "$PWD/.jail-test-touch"'
-jtest './jail --bind "$PWD:$PWD:rw" -- ls "$PWD"'
-jtest './jail --bind "$PWD:$PWD:rw" -- touch "$PWD/.jail-test-touch"'
+jtest './jail -b "$PWD:$PWD:rw" -- ls "$PWD"'
+jtest './jail -b "$PWD:$PWD:rw" -- touch "$PWD/.jail-test-touch"'
 jtest '! ./jail -b "$PWD:$PWD" -- true'
 rm -f .jail-test-touch

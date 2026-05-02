@@ -15,11 +15,11 @@ usage () {
 usage: jail [options] -- command [args...]
 
 options:
-  -p, --programs LIST       expose extra programs in /bin (comma-separated)
-  -b, --bind SRC:DEST:MODE  bind mount SRC at DEST; MODE must be ro or rw
-  -e, --set-env NAME=VALUE  set an environment variable inside the jail
-      --wd MODE             bind current directory at same path; MODE must be ro or rw
-      --home PATH           alias for --set-env HOME=PATH
+  -p LIST             expose extra programs in /bin (comma-separated)
+  -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
+  -e NAME=VALUE       set an environment variable inside the jail
+  --wd MODE           bind current directory at same path; MODE must be ro or rw
+  --home PATH         alias for -e HOME=PATH
 
 examples:
   jail -- emacs
@@ -45,7 +45,7 @@ add_extra_programs () {
 
     if [[ "$list" == "" ]]
     then
-        error "--programs requires a comma-separated list"
+        error "-p requires a comma-separated list"
         exit 1
     fi
 
@@ -54,7 +54,7 @@ add_extra_programs () {
     do
         if [[ "$program" == "" ]]
         then
-            error "--programs requires a comma-separated list"
+            error "-p requires a comma-separated list"
             exit 1
         fi
 
@@ -67,7 +67,7 @@ add_custom_bind () {
 
     if [[ "$spec" != *:*:* ]]
     then
-        error "--bind requires SRC:DEST:ro|rw"
+        error "-b requires SRC:DEST:ro|rw"
         exit 1
     fi
 
@@ -83,25 +83,25 @@ add_custom_bind () {
         mode="rw"
         dest="${rest%:rw}"
     else
-        error "--bind mode must be ro or rw"
+        error "-b mode must be ro or rw"
         exit 1
     fi
 
     if [[ "$src" == "" || "$dest" == "" ]]
     then
-        error "--bind requires SRC:DEST:ro|rw"
+        error "-b requires SRC:DEST:ro|rw"
         exit 1
     fi
 
     if [[ "$dest" != /* ]]
     then
-        error "--bind destination must be absolute: $dest"
+        error "-b destination must be absolute: $dest"
         exit 1
     fi
 
     if [[ ! -e "$src" ]]
     then
-        error "--bind source does not exist: $src"
+        error "-b source does not exist: $src"
         exit 1
     fi
 
@@ -126,7 +126,7 @@ add_custom_env () {
 
     if [[ "$spec" != *=* ]]
     then
-        error "--set-env requires NAME=VALUE"
+        error "-e requires NAME=VALUE"
         exit 1
     fi
 
@@ -135,7 +135,7 @@ add_custom_env () {
 
     if [[ "$name" == "" ]]
     then
-        error "--set-env requires NAME=VALUE"
+        error "-e requires NAME=VALUE"
         exit 1
     fi
 
@@ -151,30 +151,30 @@ do
             shift
             break
             ;;
-        -p|--programs)
+        -p)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
-                error "--programs requires a comma-separated list"
+                error "-p requires a comma-separated list"
                 exit 1
             fi
 
             add_extra_programs "$2"
             shift 2
             ;;
-        -b|--bind)
+        -b)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
-                error "--bind requires SRC:DEST:ro|rw"
+                error "-b requires SRC:DEST:ro|rw"
                 exit 1
             fi
 
             add_custom_bind "$2"
             shift 2
             ;;
-        -e|--set-env)
+        -e)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
-                error "--set-env requires NAME=VALUE"
+                error "-e requires NAME=VALUE"
                 exit 1
             fi
 

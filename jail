@@ -12,6 +12,7 @@ error () {
 
 extra_programs=()
 custom_binds=()
+custom_env=()
 
 add_extra_programs () {
     list="$1"
@@ -81,6 +82,27 @@ add_custom_bind () {
     custom_binds+=("$src" "$dest" "$mode")
 }
 
+add_custom_env () {
+    spec="$1"
+
+    if [[ "$spec" != *=* ]]
+    then
+        error "--set-env requires NAME=VALUE"
+        exit 1
+    fi
+
+    name="${spec%%=*}"
+    value="${spec#*=}"
+
+    if [[ "$name" == "" ]]
+    then
+        error "--set-env requires NAME=VALUE"
+        exit 1
+    fi
+
+    custom_env+=("$name" "$value")
+}
+
 found_separator=0
 while [[ "$#" -gt 0 ]]
 do
@@ -116,6 +138,20 @@ do
             ;;
         --bind=*)
             add_custom_bind "${1#--bind=}"
+            shift
+            ;;
+        -e|--set-env)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "--set-env requires NAME=VALUE"
+                exit 1
+            fi
+
+            add_custom_env "$2"
+            shift 2
+            ;;
+        --set-env=*)
+            add_custom_env "${1#--set-env=}"
             shift
             ;;
         --*)
@@ -256,6 +292,11 @@ bw_args=(
     --dev /dev
     --dir /tmp
 )
+
+for ((i = 0; i < ${#custom_env[@]}; i += 2))
+do
+    bw_args+=(--setenv "${custom_env[$i]}" "${custom_env[$((i + 1))]}")
+done
 
 for i in "${!executable_names[@]}"
 do

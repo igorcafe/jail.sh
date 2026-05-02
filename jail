@@ -130,22 +130,6 @@ add_custom_bind () {
     custom_binds+=("$src" "$dest" "$mode")
 }
 
-add_same_path_bind () {
-    spec="$1"
-    optional_missing="${2:-0}"
-
-    if [[ "$spec" != *:* ]]
-    then
-        error "-B requires SRC:ro|rw"
-        exit 1
-    fi
-
-    src="${spec%:*}"
-    mode="${spec##*:}"
-
-    add_custom_bind "$src:$src:$mode" "$optional_missing"
-}
-
 add_device () {
     device="$1"
     optional_missing="${2:-0}"
@@ -273,6 +257,68 @@ add_optional_host_env () {
     fi
 }
 
+expanded_args=()
+while [[ "$#" -gt 0 ]]
+do
+    case "$1" in
+        --)
+            expanded_args+=(--)
+            shift
+            expanded_args+=("$@")
+            break
+            ;;
+        -B|-B!)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "-B requires SRC:ro|rw"
+                exit 1
+            fi
+
+            bind_arg=-b
+            if [[ "$1" == -B! ]]
+            then
+                bind_arg=-b!
+            fi
+
+            src="${2%:*}"
+            mode="${2##*:}"
+            expanded_args+=("$bind_arg" "$src:$src:$mode")
+            shift 2
+            ;;
+        -E|-E!)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "-E requires an environment variable name"
+                exit 1
+            fi
+
+            name="$2"
+            if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
+            then
+                error "-E requires a valid environment variable name"
+                exit 1
+            fi
+
+            if [[ -v "$name" ]]
+            then
+                expanded_args+=(-e "$name=${!name}")
+            elif [[ "$1" != -E! ]]
+            then
+                error "-E environment variable is not set: $name"
+                exit 1
+            fi
+
+            shift 2
+            ;;
+        *)
+            expanded_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+set -- "${expanded_args[@]}"
+
 found_separator=0
 while [[ "$#" -gt 0 ]]
 do
@@ -306,22 +352,6 @@ do
             fi
 
             add_custom_bind "$2" "$optional_missing"
-            shift 2
-            ;;
-        -B|-B!)
-            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
-            then
-                error "-B requires SRC:ro|rw"
-                exit 1
-            fi
-
-            optional_missing=0
-            if [[ "$1" == -B! ]]
-            then
-                optional_missing=1
-            fi
-
-            add_same_path_bind "$2" "$optional_missing"
             shift 2
             ;;
         -d|-d!)
@@ -372,22 +402,6 @@ do
             fi
 
             add_custom_env "$2"
-            shift 2
-            ;;
-        -E|-E!)
-            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
-            then
-                error "-E requires an environment variable name"
-                exit 1
-            fi
-
-            optional_missing=0
-            if [[ "$1" == -E! ]]
-            then
-                optional_missing=1
-            fi
-
-            add_host_env "$2" "$optional_missing"
             shift 2
             ;;
         --home)

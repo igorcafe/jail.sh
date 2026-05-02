@@ -329,7 +329,7 @@ is_under_nix_bind () {
 
 bw_args=(
     --unshare-all
-    # --new-session
+    --new-session
     --clearenv
     --setenv TERM "${TERM:-}"
     --setenv PATH /bin

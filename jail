@@ -46,6 +46,7 @@ custom_env=()
 working_directory=""
 shared_working_directory=0
 shared_home_directory=0
+home_directory=""
 custom_home=0
 
 add_extra_programs () {
@@ -147,6 +148,7 @@ add_home_directory_bind () {
     fi
 
     shared_home_directory=1
+    home_directory="$home"
     custom_binds+=("$home" "$home" "$mode")
     custom_env+=(HOME "$home")
 }
@@ -219,6 +221,7 @@ do
             fi
 
             custom_home=1
+            home_directory="$2"
             add_custom_env "HOME=$2"
             shift 2
             ;;
@@ -285,6 +288,16 @@ if [[ "$custom_home" -eq 1 && "$shared_home_directory" -eq 1 ]]
 then
     error "--home and --share-home cannot be used together"
     exit 1
+fi
+
+if [[ "$home_directory" != "" && "$working_directory" == "" ]]
+then
+    working_directory="$home_directory"
+fi
+
+if [[ "$working_directory" == "" ]]
+then
+    working_directory="/"
 fi
 
 app_name="${1:-}"
@@ -406,12 +419,8 @@ bw_args=(
     --cap-drop ALL
     --proc /proc
     --dir /tmp
+    --chdir "$working_directory"
 )
-
-if [[ "$working_directory" != "" ]]
-then
-    bw_args+=(--chdir "$working_directory")
-fi
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
 do

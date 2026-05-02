@@ -10,6 +10,30 @@ error () {
     echo -e "\033[1;31merror\033[0m: $@" >&2
 }
 
+usage () {
+    cat <<'EOF'
+usage: jail [options] -- command [args...]
+
+options:
+  -p, --programs LIST       expose extra programs in /bin (comma-separated)
+  -b, --bind SRC:DEST:MODE  bind mount SRC at DEST; MODE must be ro or rw
+  -e, --set-env NAME=VALUE  set an environment variable inside the jail
+      --home PATH           alias for --set-env HOME=PATH
+
+examples:
+  jail -- emacs
+  jail -p sh,printf -- emacs -nw
+  jail -b /tmp:/host-tmp:rw -- sh
+  jail --home /tmp -- emacs -nw
+EOF
+}
+
+if [[ "$#" -eq 0 ]]
+then
+    usage
+    exit 1
+fi
+
 extra_programs=()
 custom_binds=()
 custom_env=()
@@ -122,10 +146,6 @@ do
             add_extra_programs "$2"
             shift 2
             ;;
-        --programs=*)
-            add_extra_programs "${1#--programs=}"
-            shift
-            ;;
         -b|--bind)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
@@ -135,10 +155,6 @@ do
 
             add_custom_bind "$2"
             shift 2
-            ;;
-        --bind=*)
-            add_custom_bind "${1#--bind=}"
-            shift
             ;;
         -e|--set-env)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
@@ -150,9 +166,15 @@ do
             add_custom_env "$2"
             shift 2
             ;;
-        --set-env=*)
-            add_custom_env "${1#--set-env=}"
-            shift
+        --home)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "--home requires a value"
+                exit 1
+            fi
+
+            add_custom_env "HOME=$2"
+            shift 2
             ;;
         --*)
             error "unknown option: $1"

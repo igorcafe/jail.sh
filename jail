@@ -19,7 +19,7 @@ options:
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
-  --sound             expose /dev/snd inside the jail
+  --sound             expose sound devices and runtime/config paths
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
   --wd PATH           change working directory inside the jail
@@ -53,6 +53,7 @@ working_directory=""
 custom_working_directory=0
 shared_working_directory=0
 shared_home_directory=0
+sound_enabled=0
 home_directory=""
 custom_home=0
 
@@ -285,7 +286,9 @@ do
             shift 2
             ;;
         --sound)
+            sound_enabled=1
             add_device snd
+            add_host_env XDG_RUNTIME_DIR
             shift
             ;;
         -e)
@@ -438,7 +441,7 @@ app_path="${executable_paths[0]}"
 nix_store_package_dir () {
     path="$1"
 
-    if [[ "$path" != /nix/store/*/* ]]
+    if [[ "$path" != /nix/store/* ]]
     then
         return
     fi
@@ -522,6 +525,58 @@ is_under_nix_bind () {
     return 1
 }
 
+sound_alsa_config_paths () {
+    for config_dir in /etc/alsa/conf.d /etc/static/alsa/conf.d
+    do
+        if [[ ! -d "$config_dir" ]]
+        then
+            continue
+        fi
+
+        for config in "$config_dir"/*
+        do
+            if [[ ! -e "$config" ]]
+            then
+                continue
+            fi
+
+            real_config=$(realpath "$config" 2> /dev/null || true)
+            if [[ "$real_config" != "" && -e "$real_config" ]]
+            then
+                printf '%s\n' "$real_config"
+
+                grep -Eo '/nix/store/[^ ;"]+' "$real_config" 2> /dev/null || true
+            fi
+        done
+    done
+}
+
+add_sound_binds () {
+    add_bind rw "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR"
+
+    for path in /etc/alsa /etc/static/alsa
+    do
+        if [[ -e "$path" ]]
+        then
+            add_bind ro "$path" "$path"
+        fi
+    done
+
+    while IFS= read -r path
+    do
+        if [[ ! -e "$path" ]]
+        then
+            continue
+        fi
+
+        while IFS= read -r nix_path
+        do
+            nix_binds+=("$nix_path")
+            add_bind ro "$nix_path" "$nix_path"
+        done < <(nix_store_paths "$path" | sort -u)
+    done < <(sound_alsa_config_paths | sort -u)
+}
+
 bw_args=(
     --unshare-all
     --clearenv
@@ -543,6 +598,11 @@ for device in "${custom_devices[@]}"
 do
     add_dev_bind "$device"
 done
+
+if [[ "$sound_enabled" -eq 1 ]]
+then
+    add_sound_binds
+fi
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
 do

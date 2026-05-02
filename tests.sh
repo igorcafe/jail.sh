@@ -64,7 +64,7 @@ jtest "script -qefc 'before=\$(stty -g); ./jail -- stty raw -echo; test \"\$(stt
 jtest '! ./jail -d /dev/null -- true'
 jtest '! ./jail -d ../null -- true'
 jtest '! ./jail -d jail-does-not-exist -- true'
-jtest './jail --sound -- sh -c "test -e /dev/snd"'
+jtest './jail --sound -- sh -c "test -e /dev/snd && test \"\$XDG_RUNTIME_DIR\" = \"$XDG_RUNTIME_DIR\""'
 
 jdescribe 'working directory bind shortcut'
 jtest './jail --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'

@@ -336,7 +336,6 @@ bw_args=(
     --as-pid-1
     --cap-drop ALL
     --proc /proc
-    --dev /dev
     --dir /tmp
 )
 

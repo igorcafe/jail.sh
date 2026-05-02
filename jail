@@ -49,6 +49,7 @@ custom_devices=()
 default_devices=(null zero random urandom tty)
 custom_env=()
 working_directory=""
+custom_working_directory=0
 shared_working_directory=0
 shared_home_directory=0
 home_directory=""
@@ -168,6 +169,7 @@ add_working_directory_bind () {
 
     wd="$(pwd)"
     shared_working_directory=1
+    working_directory="$wd"
     custom_binds+=("$wd" "$wd" "$mode")
 }
 
@@ -346,6 +348,7 @@ do
                 exit 1
             fi
 
+            custom_working_directory=1
             working_directory="$2"
             shift 2
             ;;
@@ -366,7 +369,7 @@ then
     exit 1
 fi
 
-if [[ "$working_directory" != "" && "$shared_working_directory" -eq 1 ]]
+if [[ "$custom_working_directory" -eq 1 && "$shared_working_directory" -eq 1 ]]
 then
     error "--wd and --share-wd cannot be used together"
     exit 1

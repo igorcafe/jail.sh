@@ -20,6 +20,7 @@ options:
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
   -e NAME=VALUE       set an environment variable inside the jail
+  -E NAME             copy environment variable from host into the jail
   --wd PATH           change working directory inside the jail
   --share-wd MODE     bind current directory at same path; MODE must be ro or rw
   --home PATH         alias for -e HOME=PATH
@@ -198,7 +199,7 @@ add_home_directory_bind () {
     shared_home_directory=1
     home_directory="$home"
     custom_binds+=("$home" "$home" "$mode")
-    custom_env+=(HOME "$home")
+    add_custom_env "HOME=$home"
 }
 
 add_custom_env () {
@@ -220,6 +221,24 @@ add_custom_env () {
     fi
 
     custom_env+=("$name" "$value")
+}
+
+add_host_env () {
+    name="$1"
+
+    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
+    then
+        error "-E requires a valid environment variable name"
+        exit 1
+    fi
+
+    if [[ ! -v "$name" ]]
+    then
+        error "-E environment variable is not set: $name"
+        exit 1
+    fi
+
+    add_custom_env "$name=${!name}"
 }
 
 found_separator=0
@@ -279,6 +298,16 @@ do
             fi
 
             add_custom_env "$2"
+            shift 2
+            ;;
+        -E)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            then
+                error "-E requires an environment variable name"
+                exit 1
+            fi
+
+            add_host_env "$2"
             shift 2
             ;;
         --home)

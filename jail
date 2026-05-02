@@ -19,6 +19,7 @@ options:
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
+  --sound             expose /dev/snd inside the jail
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
   --wd PATH           change working directory inside the jail
@@ -282,6 +283,10 @@ do
 
             add_device "$2"
             shift 2
+            ;;
+        --sound)
+            add_device snd
+            shift
             ;;
         -e)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]

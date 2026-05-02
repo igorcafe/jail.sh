@@ -59,14 +59,12 @@ jtest './jail -- sh -c "test -e /dev/urandom"'
 jtest './jail -- sh -c "test -e /dev/tty"'
 jtest './jail -d null -- sh -c "test -e /dev/null"'
 jtest './jail -d null -d null -- sh -c "test -e /dev/null"'
-if command -v script > /dev/null
-then
-    jtest "script -qefc './jail -- sh -c \"test -t 0 && : < /dev/tty\"' /dev/null"
-    jtest "script -qefc 'before=\$(stty -g); ./jail -- stty raw -echo; test \"\$(stty -g)\" = \"\$before\"' /dev/null"
-fi
+jtest "script -qefc './jail -- sh -c \"test -t 0 && : < /dev/tty\"' /dev/null"
+jtest "script -qefc 'before=\$(stty -g); ./jail -- stty raw -echo; test \"\$(stty -g)\" = \"\$before\"' /dev/null"
 jtest '! ./jail -d /dev/null -- true'
 jtest '! ./jail -d ../null -- true'
 jtest '! ./jail -d jail-does-not-exist -- true'
+jtest './jail --sound -- sh -c "test -e /dev/snd"'
 
 jdescribe 'working directory bind shortcut'
 jtest './jail --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'

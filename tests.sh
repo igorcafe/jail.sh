@@ -51,6 +51,10 @@ jtest './jail -p printf -- sh -c "printf ok"'
 jtest './jail -p printf -p cat -- sh -c "printf ok | test \"\$(cat)\" = ok"'
 jtest '! ./jail -p printf,cat -- true'
 
+jdescribe 'coreutils'
+jtest './jail --core -- sh -c "test \$(printf ok | wc -c) -eq 2"'
+jtest './jail --core -- sh -c "command -v ls && command -v cp && command -v sort"'
+
 jdescribe 'devices'
 jtest './jail -- sh -c "test -e /dev/null"'
 jtest './jail -- sh -c "test -e /dev/zero"'

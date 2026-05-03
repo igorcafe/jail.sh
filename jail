@@ -27,6 +27,7 @@ options:
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
   -d DEVICE           expose /dev/DEVICE inside the jail
   -b!, -B!, -d!, -E!  optional variants that ignore missing host resources
+  --core              expose available coreutils programs
   --gui               expose GUI, sound, DRI devices, and driver paths
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
@@ -355,6 +356,81 @@ add_program_resource_args () {
     done
 }
 
+coreutils_programs=(
+    '[' b2sum base32 base64 basename basenc cat chcon chgrp chmod chown chroot
+    cksum comm cp csplit cut date dd df dir dircolors dirname du echo env
+    expand expr factor false fmt fold ginstall groups head hostid id join kill
+    link ln logname ls md5sum mkdir mkfifo mknod mktemp mv nice nl nohup nproc
+    numfmt od paste pathchk pinky pr printenv printf ptx pwd readlink realpath
+    rm rmdir runcon seq sha1sum sha224sum sha256sum sha384sum sha512sum shred
+    shuf sleep sort split stat stdbuf stty sum sync tac tail tee test timeout
+    touch tr true truncate tsort tty uname unexpand uniq unlink uptime users vdir
+    wc who whoami yes
+)
+
+add_coreutils_fallback_args () {
+    found_coreutils_program=0
+
+    for program in "${coreutils_programs[@]}"
+    do
+        if type -P "$program" > /dev/null
+        then
+            expanded_args+=(-p "$program")
+            found_coreutils_program=1
+        fi
+    done
+
+    if [[ "$found_coreutils_program" -eq 0 ]]
+    then
+        error "--core could not detect any coreutils programs in \$PATH"
+        exit 1
+    fi
+}
+
+add_coreutils_multicall_args () {
+    coreutils_bin=$(type -P coreutils 2> /dev/null || true)
+    if [[ "$coreutils_bin" == "" ]]
+    then
+        return 1
+    fi
+
+    coreutils_path=$(realpath "$coreutils_bin" 2> /dev/null || true)
+    if [[ "$coreutils_path" == "" || ! -x "$coreutils_path" ]]
+    then
+        return 1
+    fi
+
+    applet_line=$(LC_ALL=C "$coreutils_path" --help 2> /dev/null | grep -A1 'Built-in program' | tail -1 || true)
+    applet_line="${applet_line//[/ }"
+    applet_line="${applet_line//]/ }"
+    coreutils_bind_args=()
+
+    for program in $applet_line
+    do
+        if [[ "$program" =~ ^(\[|[A-Za-z0-9._+-]+)$ ]]
+        then
+            coreutils_bind_args+=(-b! "$coreutils_path:/bin/$program:ro")
+        fi
+    done
+
+    if [[ "${#coreutils_bind_args[@]}" -eq 0 ]]
+    then
+        return 1
+    fi
+
+    expanded_args+=(-p coreutils)
+    expanded_args+=("${coreutils_bind_args[@]}")
+}
+
+add_coreutils_args () {
+    if add_coreutils_multicall_args
+    then
+        return
+    fi
+
+    add_coreutils_fallback_args
+}
+
 add_gui_args () {
     expanded_args+=(
         -d! snd
@@ -468,6 +544,10 @@ expand_meta_args () {
                 ;;
             --gui)
                 add_gui_args
+                shift
+                ;;
+            --core)
+                add_coreutils_args
                 shift
                 ;;
             -p)

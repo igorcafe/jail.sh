@@ -6,6 +6,10 @@ warn () {
     echo -e "\033[1;33mwarning\033[0m: $@" >&2
 }
 
+info () {
+    printf '\033[1;34minfo\033[0m: %s\n' "$*" >&2
+}
+
 error () {
     echo -e "\033[1;31merror\033[0m: $@" >&2
 }
@@ -25,8 +29,10 @@ options:
   -p PROGRAM          expose extra program in /bin
   -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
   -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
+  -B+ SRC:MODE        like -B, and recursively bind external symlink targets
   -d DEVICE           expose /dev/DEVICE inside the jail
-  -b!, -B!, -d!, -E!  optional variants that ignore missing host resources
+  -b!, -B!, -B+!, -d!, -E!
+                       optional variants that ignore missing host resources
   --core              expose available coreutils programs
   --gui               expose GUI, sound, DRI devices, and driver paths
   -e NAME=VALUE       set an environment variable inside the jail
@@ -342,6 +348,25 @@ add_bind_link_dependencies () {
         add_bind_dependency_args "$target"
     fi
 
+    # Recursively scanning bind directories preserves symlinks that point
+    # outside the bind, but it is too slow for large trees such as HOME.
+    # if [[ ! -d "$src" || -L "$src" ]] || ! should_scan_bind_links "$src"
+    # then
+    #     return
+    # fi
+    #
+    # while IFS= read -r link
+    # do
+    #     target=$(symlink_target "$link")
+    #     add_bind_dependency_args "$target"
+    # done < <(find "$src" -type l 2> /dev/null || true)
+}
+
+add_bind_link_dependencies_recursive () {
+    src="$1"
+
+    add_bind_link_dependencies "$src"
+
     if [[ ! -d "$src" || -L "$src" ]] || ! should_scan_bind_links "$src"
     then
         return
@@ -452,8 +477,8 @@ add_gui_args () {
         -B! /run/dbus/system_bus_socket:ro
         -B! /sys/dev:ro
         -B! /sys/devices:ro
-        -B! /etc/alsa:ro
-        -B! /etc/static/alsa:ro
+        -B+! /etc/alsa:ro
+        -B+! /etc/static/alsa:ro
         -B! /etc/fonts:ro
         -B! /etc/static/fonts:ro
         -B! /etc/machine-id:ro
@@ -482,7 +507,7 @@ expand_meta_args () {
                 expanded_args+=("$@")
                 break
                 ;;
-            -B|-B!)
+            -B|-B!|-B+|-B+!)
                 if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
                 then
                     error "-B requires SRC:ro|rw"
@@ -490,7 +515,7 @@ expand_meta_args () {
                 fi
 
                 bind_arg=-b
-                if [[ "$1" == -B! ]]
+                if [[ "$1" == -B! || "$1" == -B+! ]]
                 then
                     bind_arg=-b!
                 fi
@@ -504,7 +529,7 @@ expand_meta_args () {
                     exit 1
                 fi
 
-                if [[ "$src" == "" && "$1" == -B! ]]
+                if [[ "$src" == "" && ( "$1" == -B! || "$1" == -B+! ) ]]
                 then
                     shift 2
                     continue
@@ -514,7 +539,12 @@ expand_meta_args () {
 
                 if [[ -e "$src" ]]
                 then
-                    add_bind_link_dependencies "$src"
+                    if [[ "$1" == -B+ || "$1" == -B+! ]]
+                    then
+                        add_bind_link_dependencies_recursive "$src"
+                    else
+                        add_bind_link_dependencies "$src"
+                    fi
 
                     if [[ -d "$src" ]]
                     then
@@ -588,9 +618,19 @@ expand_meta_args () {
                     exit 1
                 fi
 
-                profile_host_home="$HOME/.local/share/jail.sh/profiles/$profile_name/home"
-                profile_jail_home="/home/$profile_name"
-                mkdir -p "$profile_host_home"
+                profile_host_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
+                profile_host_home="$profile_host_dir/home"
+                profile_jail_home_name="${USER:-user}"
+                profile_jail_home_name="${profile_jail_home_name//:/_}"
+                profile_jail_home_name="${profile_jail_home_name//\//_}"
+                profile_jail_home="/home/$profile_jail_home_name"
+                if [[ -d "$profile_host_home" ]]
+                then
+                    info "reusing existing profile $profile_name ($profile_host_dir)"
+                else
+                    mkdir -p "$profile_host_home"
+                    info "using new profile $profile_name ($profile_host_dir)"
+                fi
 
                 expanded_args+=(
                     -b "$profile_host_home:$profile_jail_home:rw"
@@ -759,20 +799,18 @@ then
     exit 1
 fi
 
-if [[ "$home_directory" != "" && "$working_directory" == "" ]]
+if [[ "$home_directory" != "" && "$working_directory" == "" && "$shared_home_directory" -eq 0 ]]
 then
     working_directory="$home_directory"
-fi
-
-if [[ "$working_directory" == "" ]]
-then
-    working_directory="/"
 fi
 
 if [[ "$home_directory" == "" && "$env_home_set" -eq 0 ]]
 then
     default_home=1
-    home_directory=/home/jail
+    default_home_name="${USER:-user}"
+    default_home_name="${default_home_name//:/_}"
+    default_home_name="${default_home_name//\//_}"
+    home_directory="/home/$default_home_name"
     add_custom_env "HOME=$home_directory"
 fi
 
@@ -1011,8 +1049,12 @@ bw_args=(
     --symlink /proc/self/fd/0 /dev/stdin
     --symlink /proc/self/fd/1 /dev/stdout
     --symlink /proc/self/fd/2 /dev/stderr
-    --chdir "$working_directory"
 )
+
+if [[ "$working_directory" != "" ]]
+then
+    bw_args+=(--chdir "$working_directory")
+fi
 
 if [[ "$default_home" -eq 1 ]]
 then

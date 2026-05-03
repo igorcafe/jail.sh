@@ -35,8 +35,9 @@ jtest () {
 
 jdescribe 'command separator'
 jtest './jail -- ls'
-jtest '! ./jail -- ls "$HOME"'
-jtest './jail -- sh -c "test \"\$PWD\" = /"'
+jtest './jail -- ls "/home/${USER:-user}"'
+jtest './jail -- sh -c "test -d \"\$PWD\""'
+jtest './jail -B "${PWD}:ro" -e "EXPECTED_PWD=${PWD}" -- sh -c "test \"\$PWD\" = \"\$EXPECTED_PWD\""'
 
 jdescribe 'incorrect usage'
 jtest '! ./jail'
@@ -95,10 +96,10 @@ jtest './jail --share-wd rw -- touch "$PWD"'
 jtest '! ./jail --share-wd bad -- true'
 
 jdescribe 'environment'
-jtest './jail -- sh -c "test \"\$HOME\" = /home/jail && test -d \"\$HOME\""'
+jtest './jail -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "test \"\$HOME\" = \"\$EXPECTED_HOME\" && test -d \"\$HOME\""'
 jtest './jail -e FOO=bar -- sh -c "test \"\$FOO\" = bar"'
 jtest './jail -E HOME -- sh -c "test \"\$HOME\" = \"$HOME\""'
-jtest './jail -e "EXPECTED_UID=$(id -u)" -e "EXPECTED_GID=$(id -g)" -- sh -c "IFS=: read -r _ _ uid gid _ home _ < /etc/passwd && test \"\$uid\" = \"\$EXPECTED_UID\" && test \"\$gid\" = \"\$EXPECTED_GID\" && test \"\$home\" = /home/jail && IFS=: read -r _ _ group_gid _ < /etc/group && test \"\$group_gid\" = \"\$EXPECTED_GID\" && test -r /etc/nsswitch.conf"'
+jtest './jail -e "EXPECTED_UID=$(id -u)" -e "EXPECTED_GID=$(id -g)" -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "IFS=: read -r _ _ uid gid _ home _ < /etc/passwd && test \"\$uid\" = \"\$EXPECTED_UID\" && test \"\$gid\" = \"\$EXPECTED_GID\" && test \"\$home\" = \"\$EXPECTED_HOME\" && IFS=: read -r _ _ group_gid _ < /etc/group && test \"\$group_gid\" = \"\$EXPECTED_GID\" && test -r /etc/nsswitch.conf"'
 jtest '! ./jail -E JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
 jtest './jail -E! JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
 jtest '! ./jail -E 1BAD -- true'
@@ -107,7 +108,7 @@ jtest './jail --home /tmp -- sh -c "test \"\$HOME\" = /tmp"'
 jtest './jail --home /tmp -- sh -c "test \"\$PWD\" = /tmp"'
 jtest './jail --home /tmp --wd / -- sh -c "test \"\$PWD\" = /"'
 jtest './jail --share-home ro -- sh -c "test \"\$HOME\" = \"$HOME\""'
-jtest './jail --share-home ro -- sh -c "test \"\$PWD\" = \"\$HOME\""'
+jtest './jail --share-home ro -- sh -c "test \"\$PWD\" = \"$PWD\""'
 jtest './jail --share-home ro --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'
 jtest './jail --share-home ro -- ls "$HOME"'
 jtest '! ./jail --share-home ro -- touch "$HOME/.jail-test-share-home"'
@@ -119,12 +120,15 @@ jdescribe 'persistent profile home'
 profile_name="jail-test-profile-$$"
 profile_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
 profile_home_dir="$profile_dir/home"
+profile_jail_home="/home/${USER:-user}"
 rm -rf "$profile_dir"
-jtest './jail -P "$profile_name" -- sh -c "test \"\$HOME\" = \"/home/$profile_name\" && test \"\$PWD\" = \"/home/$profile_name\" && : > \"\$HOME/file\""'
+jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && [[ "$output" == *"using new profile $profile_name ($profile_dir)"* ]]'
+jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && [[ "$output" == *"reusing existing profile $profile_name ($profile_dir)"* ]]'
+jtest './jail -P "$profile_name" -- sh -c "test \"\$HOME\" = \"$profile_jail_home\" && test \"\$PWD\" = \"$profile_jail_home\" && : > \"\$HOME/file\""'
 jtest 'test -e "$profile_home_dir/file"'
 jtest './jail -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
-jtest './jail -P "$profile_name" -- sh -c "IFS=: read -r _ _ _ _ _ home _ < /etc/passwd && test \"\$home\" = \"/home/$profile_name\""'
-jtest './jail --gui -P "$profile_name" -- sh -c "test \"\$HOME\" = \"/home/$profile_name\" && test \"\$XDG_CACHE_HOME\" = /tmp"'
+jtest './jail -P "$profile_name" -- sh -c "IFS=: read -r _ _ _ _ _ home _ < /etc/passwd && test \"\$home\" = \"$profile_jail_home\""'
+jtest './jail --gui -P "$profile_name" -- sh -c "test \"\$HOME\" = \"$profile_jail_home\" && test \"\$XDG_CACHE_HOME\" = /tmp"'
 jtest '! ./jail -P bad/name -- true'
 jtest '! ./jail -P "$profile_name" --home /tmp -- true'
 rm -rf "$profile_dir"
@@ -151,7 +155,8 @@ touch .jail-test-link-target/file
 ln -s .jail-test-link-target .jail-test-link
 ln -s "$PWD/.jail-test-link-target" .jail-test-link-dir/target
 jtest './jail -B "$PWD/.jail-test-link:ro" -- sh -c "test -e \"$PWD/.jail-test-link/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
-jtest './jail -B "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
+jtest '! ./jail -B "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\""'
+jtest './jail -B+ "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
 rm -rf .jail-test-link .jail-test-link-dir .jail-test-link-target
 rm -f .jail-test-touch
 

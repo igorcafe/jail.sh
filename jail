@@ -10,6 +10,13 @@ error () {
     echo -e "\033[1;31merror\033[0m: $@" >&2
 }
 
+debug () {
+    if [[ "${DEBUG:-}" != "" ]]
+    then
+        printf '\033[1;36mdebug\033[0m: %s\n' "$*" >&2
+    fi
+}
+
 usage () {
     cat <<'EOF'
 usage: jail [options] -- command [args...]
@@ -676,18 +683,88 @@ resolve_executable () {
         exit 1
     fi
 
-    printf '%s\n' "$executable_path"
+    printf '%s\n' "$executable_bin"
 }
 
 executable_names=("$app_name" sh "${extra_programs[@]}")
+executable_bins=()
 executable_paths=()
+executable_aliases=()
 
 for executable in "${executable_names[@]}"
 do
-    executable_paths+=("$(resolve_executable "$executable")")
+    executable_bin="$(resolve_executable "$executable")"
+    executable_path="$(realpath "$executable_bin" 2> /dev/null)"
+    executable_bins+=("$executable_bin")
+    executable_paths+=("$executable_path")
+
+    if [[ "$executable" != */* ]]
+    then
+        executable_aliases+=("${executable_path%/*}/$executable")
+    else
+        executable_aliases+=("$executable_path")
+    fi
 done
 
 app_path="${executable_paths[0]}"
+app_argv0="${executable_aliases[0]}"
+
+path_dirs=()
+
+add_path_dir () {
+    path="$1"
+    dir="${path%/*}"
+
+    if [[ "$dir" == "$path" ]]
+    then
+        return
+    fi
+
+    if [[ "$dir" == "" ]]
+    then
+        dir="/"
+    fi
+
+    for path_dir in "${path_dirs[@]}"
+    do
+        if [[ "$dir" == "$path_dir" ]]
+        then
+            return
+        fi
+    done
+
+    path_dirs+=("$dir")
+}
+
+for executable_path in "${executable_paths[@]}"
+do
+    add_path_dir "$executable_path"
+done
+
+for executable_alias in "${executable_aliases[@]}"
+do
+    add_path_dir "$executable_alias"
+done
+
+for executable_bin in "${executable_bins[@]}"
+do
+    add_path_dir "$executable_bin"
+done
+
+add_path_dir /bin/sh
+
+jail_path=""
+for path_dir in "${path_dirs[@]}"
+do
+    if [[ "$jail_path" == "" ]]
+    then
+        jail_path="$path_dir"
+    else
+        jail_path="$jail_path:$path_dir"
+    fi
+done
+
+debug "main executable: ${executable_names[0]} -> ${executable_paths[0]}"
 
 bw_binds=()
 nix_binds=()
@@ -805,7 +882,7 @@ bw_args=(
     --unshare-all
     --clearenv
     --setenv TERM "${TERM:-}"
-    --setenv PATH /bin
+    --setenv PATH "$jail_path"
     --as-pid-1
     --cap-drop ALL
     --proc /proc
@@ -849,13 +926,34 @@ done
 for i in "${!executable_names[@]}"
 do
     executable_name="${executable_names[$i]}"
+    executable_bin="${executable_bins[$i]}"
     executable_path="${executable_paths[$i]}"
+    executable_alias="${executable_aliases[$i]}"
 
-    add_bind ro "$executable_path" "/bin/${executable_name}"
+    add_bind ro "$executable_path" "$executable_path"
+
+    if [[ "$executable_alias" != "$executable_path" ]]
+    then
+        add_bind ro "$executable_path" "$executable_alias"
+    fi
+
+    if [[ "$executable_bin" != "$executable_path" ]]
+    then
+        add_bind ro "$executable_path" "$executable_bin"
+    fi
+
+    if [[ "$executable_name" == sh ]]
+    then
+        add_bind ro "$executable_path" /bin/sh
+    fi
 
     while IFS= read -r path
     do
         nix_binds+=("$path")
+        if [[ "$i" -eq 0 ]]
+        then
+            debug "Nix dependency for $executable_name: $path"
+        fi
         add_bind ro "$path" "$path"
     done < <(nix_store_paths "$executable_path" | sort -u)
 done
@@ -886,15 +984,26 @@ ldd_paths () {
 }
 
 
-for executable_path in "${executable_paths[@]}"
+for i in "${!executable_paths[@]}"
 do
+    executable_name="${executable_names[$i]}"
+    executable_path="${executable_paths[$i]}"
+
     while IFS= read -r lib
     do
         if is_under_nix_bind "$lib"
         then
+            if [[ "$i" -eq 0 ]]
+            then
+                debug "library dependency for $executable_name covered by Nix bind: $lib"
+            fi
             continue
         fi
 
+        if [[ "$i" -eq 0 ]]
+        then
+            debug "library dependency for $executable_name: $lib"
+        fi
         add_bind ro "$lib" "$lib"
     done < <(ldd_paths "$executable_path" | sort -u)
 done
@@ -935,7 +1044,7 @@ then
 fi
 
 set +e
-bwrap "${bw_binds[@]}" "${bw_args[@]}" "/bin/${app_name}" "$@"
+bwrap "${bw_binds[@]}" "${bw_args[@]}" --argv0 "$app_argv0" "$app_path" "$@"
 status=$?
 set -e
 

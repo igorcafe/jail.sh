@@ -6,6 +6,8 @@
 
 This project is experimental. I am not an infosec professional, and this tool may contain security vulnerabilities. Do not rely on it as a hardened sandbox for untrusted code without reviewing and testing it for your threat model.
 
+## Default Behavior
+
 By default it only exposes:
 
 - `/bin/sh`

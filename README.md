@@ -1,6 +1,6 @@
 # jail.sh
 
-`jail.sh` is a small Bash wrapper around Bubblewrap (`bwrap`) for running a command in a minimal, isolated filesystem and environment.
+`jail.sh` is a small Bash sandbox tool based on Bubblewrap (`bwrap`) for running a command in a minimal, isolated filesystem and environment.
 
 ## Security Notice
 
@@ -12,9 +12,11 @@ By default it only exposes:
 
 - `/bin/sh`
 - the requested executable and its dependencies
-- essential devices such as `/dev/null`, `/dev/zero`, `/dev/random`, `/dev/urandom`, and `/dev/tty`
+- essential devices such as `/dev/null`, `/dev/zero`, `/dev/random`, `/dev/urandom`, `/dev/tty`, and `/dev/shm`
 - a minimal `/etc/passwd`, `/etc/group`, and `/etc/nsswitch.conf`
-- `/proc`, `/tmp`, and `/dev/shm`
+- `/proc` for the jailed process namespace
+- default directories: `/tmp` and an empty home directory
+- environment variables: `TERM`, a minimal `PATH`, a default `HOME`, and locale-related variables from the host when set
 
 ## Requirements
 

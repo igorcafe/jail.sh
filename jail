@@ -23,7 +23,7 @@ options:
   --gui               expose GUI, sound, DRI devices, and driver paths
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
-  -P NAME             persist HOME in ~/.local/share/jail.sh/home/NAME
+  -P NAME             persist HOME in ~/.local/share/jail.sh/profiles/NAME/home
   --net               allow access to the host network namespace
   --wd PATH           change working directory inside the jail
   --share-wd MODE     bind current directory at same path; MODE must be ro or rw
@@ -469,7 +469,7 @@ expand_meta_args () {
                     exit 1
                 fi
 
-                profile_host_home="$HOME/.local/share/jail.sh/home/$profile_name"
+                profile_host_home="$HOME/.local/share/jail.sh/profiles/$profile_name/home"
                 profile_jail_home="/home/$profile_name"
                 mkdir -p "$profile_host_home"
 

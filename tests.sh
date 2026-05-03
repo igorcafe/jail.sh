@@ -112,10 +112,11 @@ rm -f "$HOME/.jail-test-share-home"
 
 jdescribe 'persistent profile home'
 profile_name="jail-test-profile-$$"
-profile_dir="$HOME/.local/share/jail.sh/home/$profile_name"
+profile_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
+profile_home_dir="$profile_dir/home"
 rm -rf "$profile_dir"
 jtest './jail -P "$profile_name" -- sh -c "test \"\$HOME\" = \"/home/$profile_name\" && test \"\$PWD\" = \"/home/$profile_name\" && : > \"\$HOME/file\""'
-jtest 'test -e "$profile_dir/file"'
+jtest 'test -e "$profile_home_dir/file"'
 jtest './jail -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
 jtest './jail -P "$profile_name" -- sh -c "IFS=: read -r _ _ _ _ _ home _ < /etc/passwd && test \"\$home\" = \"/home/$profile_name\""'
 jtest './jail --gui -P "$profile_name" -- sh -c "test \"\$HOME\" = \"/home/$profile_name\" && test \"\$XDG_CACHE_HOME\" = /tmp"'

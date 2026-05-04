@@ -60,10 +60,10 @@ Debug logs include only the main executable and its Nix store or shared library 
   Expose an extra program inside `/bin`.
 
 - `-b SRC:DEST:MODE`
-  Bind mount `SRC` at `DEST`. `MODE` must be `ro` or `rw`.
+  Bind mount `SRC` at `DEST`. Relative paths are resolved from the host working directory. `MODE` must be `ro` or `rw`.
 
 - `-B PATH:MODE`
-  Short for `-b PATH:PATH:MODE`.
+  Short for `-b PATH:PATH:MODE`. Relative paths are resolved from the host working directory.
 
 - `-B+ PATH:MODE`
   Like `-B`, and recursively bind external symlink targets.

@@ -27,8 +27,10 @@ usage: jail [options] -- command [args...]
 
 options:
   -p PROGRAM          expose extra program in /bin
-  -b SRC:DEST:MODE    bind mount SRC at DEST; MODE must be ro or rw
-  -B SRC:MODE         bind mount SRC at same path; MODE must be ro or rw
+  -b SRC:DEST:MODE    bind mount SRC at DEST; relative paths use host PWD
+                       MODE must be ro or rw
+  -B SRC:MODE         bind mount SRC at same path; relative paths use host PWD
+                       MODE must be ro or rw
   -B+ SRC:MODE        like -B, and recursively bind external symlink targets
   -d DEVICE           expose /dev/DEVICE inside the jail
   -b!, -B!, -B+!, -d!, -E!
@@ -76,6 +78,7 @@ default_home=0
 env_home_set=0
 share_network=0
 jail_runtime_dir=""
+host_working_directory="$(pwd)"
 
 cleanup_runtime_dir () {
     if [[ "$jail_runtime_dir" != "" ]]
@@ -104,6 +107,17 @@ add_extra_program () {
     fi
 
     extra_programs+=("$program")
+}
+
+host_path () {
+    path="$1"
+
+    if [[ "$path" == /* ]]
+    then
+        printf '%s\n' "$path"
+    else
+        printf '%s/%s\n' "$host_working_directory" "$path"
+    fi
 }
 
 add_custom_bind () {
@@ -138,11 +152,8 @@ add_custom_bind () {
         exit 1
     fi
 
-    if [[ "$dest" != /* ]]
-    then
-        error "-b destination must be absolute: $dest"
-        exit 1
-    fi
+    src="$(host_path "$src")"
+    dest="$(host_path "$dest")"
 
     if [[ ! -e "$src" ]]
     then
@@ -533,6 +544,11 @@ expand_meta_args () {
                 then
                     shift 2
                     continue
+                fi
+
+                if [[ "$src" != "" ]]
+                then
+                    src="$(host_path "$src")"
                 fi
 
                 expanded_args+=("$bind_arg" "$src:$src:$mode")

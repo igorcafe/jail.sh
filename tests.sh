@@ -136,6 +136,7 @@ rm -rf "$profile_dir"
 jdescribe 'custom binds'
 rm -f .jail-test-touch
 jtest './jail -b "$PWD:$PWD:ro" -- ls "$PWD"'
+jtest './jail -b ".:.:ro" -- ls "$PWD"'
 jtest '! ./jail -b "$PWD:$PWD:ro" -- touch "$PWD/.jail-test-touch"'
 jtest './jail -b "$PWD:$PWD:rw" -- ls "$PWD"'
 jtest './jail -b "$PWD:$PWD:rw" -- touch "$PWD/.jail-test-touch"'
@@ -143,6 +144,7 @@ jtest './jail -b! "/jail-test-does-not-exist:/jail-test-does-not-exist:ro" -- tr
 jtest '! ./jail -b "$PWD:$PWD" -- true'
 jtest '! ./jail -b! "$PWD:$PWD" -- true'
 jtest './jail -B "$PWD:ro" -- ls "$PWD"'
+jtest './jail -B ".:ro" -- ls "$PWD"'
 jtest '! ./jail -B "$PWD:ro" -- touch "$PWD/.jail-test-touch"'
 jtest './jail -B "$PWD:rw" -- touch "$PWD/.jail-test-touch"'
 jtest './jail -B! "/jail-test-does-not-exist:ro" -- true'
@@ -157,6 +159,7 @@ ln -s "$PWD/.jail-test-link-target" .jail-test-link-dir/target
 jtest './jail -B "$PWD/.jail-test-link:ro" -- sh -c "test -e \"$PWD/.jail-test-link/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
 jtest '! ./jail -B "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\""'
 jtest './jail -B+ "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
+jtest './jail -B+ ".jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
 rm -rf .jail-test-link .jail-test-link-dir .jail-test-link-target
 rm -f .jail-test-touch
 

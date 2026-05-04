@@ -485,7 +485,7 @@ add_gui_args () {
         -E! DISPLAY
         -E! WAYLAND_DISPLAY
         -E! XAUTHORITY
-        -B! /tmp/.X11-unix:rw
+        -B! /tmp/.X11-unix:ro
         -B! /run/dbus/system_bus_socket:ro
         -B! /sys/dev:ro
         -B! /sys/devices:ro
@@ -498,7 +498,7 @@ add_gui_args () {
         -B! /etc/machine-id:ro
         -B! /run/opengl-driver:ro
         -B! /run/opengl-driver-32:ro
-        -B! "${XDG_RUNTIME_DIR:-}:rw"
+        -B! "${XDG_RUNTIME_DIR:-}:ro"
         -B! "${XAUTHORITY:-}:ro"
     )
 

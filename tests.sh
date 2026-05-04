@@ -90,6 +90,14 @@ jtest '! ./jail -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c
 jtest './jail --net -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c "test \"\$(readlink /proc/self/ns/net)\" = \"\$HOST_NET_NAMESPACE\""'
 jtest './jail --net -- sh -c "test ! -e /etc/resolv.conf || test -r /etc/resolv.conf"'
 jtest './jail --net -- sh -c "test ! -e /etc/ssl/certs/ca-certificates.crt || test -r /etc/ssl/certs/ca-certificates.crt"'
+if [[ -e /etc/ssl/certs/ca-certificates.crt ]]
+then
+    jtest './jail --net -- test -r /etc/ssl/certs/ca-certificates.crt'
+fi
+if [[ -e /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem ]]
+then
+    jtest './jail --net -- test -r /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'
+fi
 
 jdescribe 'working directory bind shortcut'
 jtest './jail --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'

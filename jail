@@ -604,7 +604,12 @@ expand_meta_args () {
                 ;;
             --net)
                 share_network=1
-                expanded_args+=(-B+! /etc/ssl/certs:ro)
+                expanded_args+=(
+                    -B+! /etc/hosts:ro
+                    -B+! /etc/resolv.conf:ro
+                    -B+! /etc/ssl/certs:ro
+                    -B+! /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem:ro
+                )
                 shift
                 ;;
             --core)
@@ -1008,20 +1013,9 @@ add_user_database_binds () {
     printf '%s:x:%s:%s\n' "$group" "$gid" "$user" > "$jail_runtime_dir/group"
     printf 'passwd: files\ngroup: files\nshadow: files\nhosts: files dns\n' > "$jail_runtime_dir/nsswitch.conf"
 
-    bw_binds+=(--dir /etc)
     add_bind ro "$jail_runtime_dir/passwd" /etc/passwd
     add_bind ro "$jail_runtime_dir/group" /etc/group
     add_bind ro "$jail_runtime_dir/nsswitch.conf" /etc/nsswitch.conf
-}
-
-add_network_binds () {
-    for path in /etc/hosts /etc/resolv.conf
-    do
-        if [[ -e "$path" ]]
-        then
-            add_bind ro "$path" "$path"
-        fi
-    done
 }
 
 is_under_nix_bind () {
@@ -1102,11 +1096,6 @@ done
 
 add_user_database_binds
 add_locale_binds
-
-if [[ "$share_network" -eq 1 ]]
-then
-    add_network_binds
-fi
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
 do

@@ -87,10 +87,8 @@ jdescribe 'network'
 host_net_namespace="$(readlink /proc/self/ns/net)"
 jtest '! ./jail -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c "test \"\$(readlink /proc/self/ns/net)\" = \"\$HOST_NET_NAMESPACE\""'
 jtest './jail --net -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c "test \"\$(readlink /proc/self/ns/net)\" = \"\$HOST_NET_NAMESPACE\""'
-if [[ -e /etc/resolv.conf ]]
-then
-    jtest './jail --net -- sh -c "test -r /etc/resolv.conf"'
-fi
+jtest './jail --net -- sh -c "test ! -e /etc/resolv.conf || test -r /etc/resolv.conf"'
+jtest './jail --net -- sh -c "test ! -e /etc/ssl/certs/ca-certificates.crt || test -r /etc/ssl/certs/ca-certificates.crt"'
 
 jdescribe 'working directory bind shortcut'
 jtest './jail --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'

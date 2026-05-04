@@ -602,6 +602,11 @@ expand_meta_args () {
                 add_gui_args
                 shift
                 ;;
+            --net)
+                share_network=1
+                expanded_args+=(-B+! /etc/ssl/certs:ro)
+                shift
+                ;;
             --core)
                 add_coreutils_args
                 shift

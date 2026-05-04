@@ -66,7 +66,6 @@ fi
 extra_programs=()
 custom_binds=()
 custom_devices=()
-default_devices=(null zero random urandom tty)
 custom_env=()
 working_directory=""
 custom_working_directory=0
@@ -96,18 +95,6 @@ do
         custom_env+=("$name" "${!name}")
     fi
 done
-
-add_extra_program () {
-    program="$1"
-
-    if [[ "$program" == "" ]]
-    then
-        error "-p requires a program name"
-        exit 1
-    fi
-
-    extra_programs+=("$program")
-}
 
 host_path () {
     path="$1"
@@ -315,10 +302,7 @@ add_bind_dependency_args () {
 
     expanded_args+=(-b! "$target:$target:ro")
 
-    if [[ -d "$target" ]]
-    then
-        add_nix_store_bind_args "$target"
-    fi
+    add_nix_store_bind_args "$target"
 }
 
 symlink_target () {
@@ -565,10 +549,7 @@ expand_meta_args () {
                         add_bind_link_dependencies "$src"
                     fi
 
-                    if [[ -d "$src" ]]
-                    then
-                        add_nix_store_bind_args "$src"
-                    fi
+                    add_nix_store_bind_args "$src"
                 fi
 
                 shift 2
@@ -675,6 +656,15 @@ expand_meta_args () {
     done
 }
 
+default_args=(-d null -d zero -d random -d urandom -d tty)
+
+if [[ -v LOCALE_ARCHIVE && -e "$LOCALE_ARCHIVE" ]]
+then
+    default_args+=(-B+! "$LOCALE_ARCHIVE:ro")
+fi
+
+set -- "${default_args[@]}" "$@"
+
 expand_meta_args "$@"
 expand_meta_args "${expanded_args[@]}"
 set -- "${expanded_args[@]}"
@@ -695,7 +685,7 @@ do
                 exit 1
             fi
 
-            add_extra_program "$2"
+            extra_programs+=("$2")
             shift 2
             ;;
         -b|-b!)
@@ -757,10 +747,6 @@ do
             home_directory="$2"
             add_custom_env "HOME=$2"
             shift 2
-            ;;
-        --net)
-            share_network=1
-            shift
             ;;
         --share-home)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
@@ -961,12 +947,11 @@ add_bind () {
     src="$2"
     dest="$3"
 
-    if [[ "$mode" == "ro" ]]
-    then
-        bind_arg="--ro-bind"
-    else
-        bind_arg="--bind"
-    fi
+    case "$mode" in
+        ro) bind_arg="--ro-bind" ;;
+        rw) bind_arg="--bind" ;;
+        dev) bind_arg="--dev-bind" ;;
+    esac
 
     for bound_dest in "${bound_dests[@]}"
     do
@@ -978,23 +963,6 @@ add_bind () {
 
     bound_dests+=("$dest")
     bw_binds+=("$bind_arg" "$src" "$dest")
-}
-
-add_dev_bind () {
-    device="$1"
-    src="/dev/$device"
-    dest="/dev/$device"
-
-    for bound_dest in "${bound_dests[@]}"
-    do
-        if [[ "$dest" == "$bound_dest" ]]
-        then
-            return
-        fi
-    done
-
-    bound_dests+=("$dest")
-    bw_binds+=(--dev-bind "$src" "$dest")
 }
 
 add_user_database_binds () {
@@ -1032,27 +1000,6 @@ is_under_nix_bind () {
     return 1
 }
 
-add_locale_binds () {
-    if [[ ! -v LOCALE_ARCHIVE || ! -e "$LOCALE_ARCHIVE" ]]
-    then
-        return
-    fi
-
-    add_bind ro "$LOCALE_ARCHIVE" "$LOCALE_ARCHIVE"
-
-    real_locale_archive=$(realpath "$LOCALE_ARCHIVE" 2> /dev/null || true)
-    if [[ "$real_locale_archive" == "" || ! -e "$real_locale_archive" ]]
-    then
-        return
-    fi
-
-    while IFS= read -r nix_path
-    do
-        nix_binds+=("$nix_path")
-        add_bind ro "$nix_path" "$nix_path"
-    done < <(nix_store_paths "$real_locale_archive" | sort -u)
-}
-
 bw_args=(
     --unshare-all
     --clearenv
@@ -1084,18 +1031,12 @@ then
     bw_args+=(--share-net)
 fi
 
-for device in "${default_devices[@]}"
-do
-    add_dev_bind "$device"
-done
-
 for device in "${custom_devices[@]}"
 do
-    add_dev_bind "$device"
+    add_bind dev "/dev/$device" "/dev/$device"
 done
 
 add_user_database_binds
-add_locale_binds
 
 for ((i = 0; i < ${#custom_env[@]}; i += 2))
 do

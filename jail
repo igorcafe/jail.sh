@@ -1154,12 +1154,13 @@ ldd_paths () {
 
     { ldd "$bin_path" 2> /dev/null || true; } | while read -r line
     do
-        if [[ "$line" != *"=>"* ]]
-        then
-            continue
-        fi
         left=$(echo "$line" | awk '{print $1}')
-        right=$(echo "$line" | awk '{print $3}')
+        right=""
+
+        if [[ "$line" == *"=>"* ]]
+        then
+            right=$(echo "$line" | awk '{print $3}')
+        fi
 
         if [[ "$left" == /* ]]
         then

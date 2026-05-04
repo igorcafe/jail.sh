@@ -34,6 +34,7 @@ jtest () {
 }
 
 jdescribe 'command separator'
+jtest './jail -- pwd'
 jtest './jail -- ls'
 jtest './jail -- ls "/home/${USER:-user}"'
 jtest './jail -- sh -c "test -d \"\$PWD\""'

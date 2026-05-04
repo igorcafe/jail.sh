@@ -478,6 +478,7 @@ add_gui_args () {
     expanded_args+=(
         -d! snd
         -d! dri
+        -d! input
         -e XDG_CACHE_HOME=/tmp
         -E! DBUS_SESSION_BUS_ADDRESS
         -E! XDG_RUNTIME_DIR
@@ -488,6 +489,8 @@ add_gui_args () {
         -B! /run/dbus/system_bus_socket:ro
         -B! /sys/dev:ro
         -B! /sys/devices:ro
+        -B! /sys/class/input:ro
+        -B! /run/udev:ro
         -B+! /etc/alsa:ro
         -B+! /etc/static/alsa:ro
         -B! /etc/fonts:ro

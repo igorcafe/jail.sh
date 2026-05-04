@@ -74,6 +74,14 @@ jtest '! ./jail -d jail-does-not-exist -- true'
 jtest './jail -d! jail-does-not-exist -- true'
 jtest '! ./jail -d! ../null -- true'
 jtest './jail --gui -- sh -c "test -e /dev/snd && test -e /dev/dri && test \"\$XDG_RUNTIME_DIR\" = \"$XDG_RUNTIME_DIR\""'
+if [[ -e /sys/class/input && -e /run/udev ]]
+then
+    jtest './jail --gui -- sh -c "test -e /sys/class/input && test -e /run/udev"'
+fi
+if [[ -e /dev/input ]]
+then
+    jtest './jail --gui -- sh -c "test -e /dev/input"'
+fi
 
 jdescribe 'network'
 host_net_namespace="$(readlink /proc/self/ns/net)"

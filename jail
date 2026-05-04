@@ -427,9 +427,7 @@ add_gui_args () {
         -B! /sys/class/input:ro
         -B! /run/udev:ro
         -B+! /etc/alsa:ro
-        -B+! /etc/static/alsa:ro
-        -B! /etc/fonts:ro
-        -B! /etc/static/fonts:ro
+        -B+! /etc/fonts:ro
         -B! /etc/machine-id:ro
         -B! /run/opengl-driver:ro
         -B! /run/opengl-driver-32:ro

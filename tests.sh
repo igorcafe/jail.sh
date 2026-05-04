@@ -3,6 +3,7 @@
 set -u
 
 green=$'\033[1;32m'
+yellow=$'\033[1;33m'
 red=$'\033[1;31m'
 bold=$'\033[1m'
 white=$'\033[1;37m'
@@ -33,6 +34,31 @@ jtest () {
     fi
 }
 
+jskip () {
+    if [[ "$#" -lt 3 || "$2" != jtest ]]
+    then
+        printf '%sFAIL%s: jskip requires: jskip "condition" jtest "command"\n' "$red" "$reset" >&2
+        exit 1
+    fi
+
+    condition="$1"
+    shift 2
+    command="$1"
+
+    if output="$(eval "$condition" 2>&1)"
+    then
+        printf '%sSKIP%s: %s\n' "$yellow" "$reset" "$command" >&2
+        printf 'Reason: %s\n' "$condition" >&2
+        if [[ "$output" != "" ]]
+        then
+            echo "$output" >&2
+        fi
+        return 0
+    fi
+
+    jtest "$command"
+}
+
 jdescribe 'command separator'
 jtest './jail -- pwd'
 jtest './jail -- ls'
@@ -58,14 +84,7 @@ jtest './jail --core -- sh -c "test \$(printf ok | wc -c) -eq 2"'
 jtest './jail --core -- sh -c "command -v ls && command -v cp && command -v sort"'
 
 jdescribe 'devices'
-jtest './jail -- sh -c "test -e /dev/null"'
-jtest './jail -- sh -c "test -e /dev/zero"'
-jtest './jail -- sh -c "test -e /dev/random"'
-jtest './jail -- sh -c "test -e /dev/urandom"'
-jtest './jail -- sh -c "test -e /dev/tty"'
-jtest './jail -- sh -c "test -d /dev/shm && : > /dev/shm/jail-test-shm"'
-jtest './jail -- sh -c "test -e /dev/fd/0 && test -e /dev/stdin && test -e /dev/stdout && test -e /dev/stderr"'
-jtest './jail -d null -- sh -c "test -e /dev/null"'
+jtest './jail -- sh -c "test -e /dev/null && test -e /dev/zero && test -e /dev/random && test -e /dev/urandom && test -e /dev/tty && test -d /dev/shm && : > /dev/shm/jail-test-shm && test -e /dev/fd/0 && test -e /dev/stdin && test -e /dev/stdout && test -e /dev/stderr"'
 jtest './jail -d null -d null -- sh -c "test -e /dev/null"'
 jtest "script -qefc './jail -- sh -c \"test -t 0 && : < /dev/tty\"' /dev/null"
 jtest "script -qefc 'before=\$(stty -g); ./jail -- stty raw -echo; test \"\$(stty -g)\" = \"\$before\"' /dev/null"
@@ -74,15 +93,29 @@ jtest '! ./jail -d ../null -- true'
 jtest '! ./jail -d jail-does-not-exist -- true'
 jtest './jail -d! jail-does-not-exist -- true'
 jtest '! ./jail -d! ../null -- true'
-jtest './jail --gui -- sh -c "test -e /dev/snd && test -e /dev/dri && test \"\$XDG_RUNTIME_DIR\" = \"$XDG_RUNTIME_DIR\""'
-if [[ -e /sys/class/input && -e /run/udev ]]
-then
+
+jdescribe 'flag --gui'
+jtest './jail --gui -- sh -c "test \"\$XDG_CACHE_HOME\" = /tmp"'
+
+jdescribe 'flag --gui: fonts'
+jskip '[ ! -e /etc/fonts ]' \
+    jtest './jail --gui -- test -e /etc/fonts'
+jskip '[ ! -e /etc/static/fonts ]' \
+    jtest './jail --gui -- test -e /etc/static/fonts'
+
+jdescribe 'flag --gui: audio'
+jskip '[ ! -e /dev/snd ]' \
+    jtest './jail --gui -B "$PWD/testdata/short.wav:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/short.wav"'
+
+jdescribe 'flag --gui: video'
+jskip '[ ! -e /dev/dri ]' \
+    jtest './jail --gui -- test -e /dev/dri'
+
+jdescribe 'flag --gui: input'
+jskip '[ ! -e /sys/class/input -o ! -e /run/udev ]' \
     jtest './jail --gui -- sh -c "test -e /sys/class/input && test -e /run/udev"'
-fi
-if [[ -e /dev/input ]]
-then
+jskip '[ ! -e /dev/input ]' \
     jtest './jail --gui -- sh -c "test -e /dev/input"'
-fi
 
 jdescribe 'network'
 host_net_namespace="$(readlink /proc/self/ns/net)"
@@ -90,14 +123,10 @@ jtest '! ./jail -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c
 jtest './jail --net -p readlink -e "HOST_NET_NAMESPACE=$host_net_namespace" -- sh -c "test \"\$(readlink /proc/self/ns/net)\" = \"\$HOST_NET_NAMESPACE\""'
 jtest './jail --net -- sh -c "test ! -e /etc/resolv.conf || test -r /etc/resolv.conf"'
 jtest './jail --net -- sh -c "test ! -e /etc/ssl/certs/ca-certificates.crt || test -r /etc/ssl/certs/ca-certificates.crt"'
-if [[ -e /etc/ssl/certs/ca-certificates.crt ]]
-then
+jskip '[ ! -e /etc/ssl/certs/ca-certificates.crt ]' \
     jtest './jail --net -- test -r /etc/ssl/certs/ca-certificates.crt'
-fi
-if [[ -e /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem ]]
-then
+jskip '[ ! -e /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem ]' \
     jtest './jail --net -- test -r /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'
-fi
 
 jdescribe 'environment'
 jtest './jail -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "test \"\$HOME\" = \"\$EXPECTED_HOME\" && test -d \"\$HOME\""'
@@ -140,6 +169,7 @@ jtest './jail -B ".:ro" -- ls "$PWD"'
 jtest '! ./jail -B "$PWD:ro" -- touch "$PWD/.jail-test-touch"'
 jtest './jail -B "$PWD:rw" -- touch "$PWD/.jail-test-touch"'
 jtest './jail -B! "/jail-test-does-not-exist:ro" -- true'
+jtest './jail -B+! "/jail-test-does-not-exist:ro" -- true'
 jtest '! ./jail -B "$PWD" -- true'
 jtest '! ./jail -B "$PWD:bad" -- true'
 jtest '! ./jail -B! "$PWD:bad" -- true'

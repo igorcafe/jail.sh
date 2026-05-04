@@ -99,17 +99,6 @@ then
     jtest './jail --net -- test -r /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'
 fi
 
-jdescribe 'working directory bind shortcut'
-jtest './jail --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'
-jtest '! ./jail --wd tmp -- true'
-jtest '! ./jail --wd /tmp --share-wd ro -- true'
-jtest './jail --share-wd ro -e "EXPECTED_PWD=$PWD" -- sh -c "test \"\$PWD\" = \"\$EXPECTED_PWD\""'
-jtest './jail --share-wd ro -- ls "$PWD"'
-jtest '! ./jail --share-wd ro -- touch "$PWD"'
-jtest './jail --share-wd rw -- ls "$PWD"'
-jtest './jail --share-wd rw -- touch "$PWD"'
-jtest '! ./jail --share-wd bad -- true'
-
 jdescribe 'environment'
 jtest './jail -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "test \"\$HOME\" = \"\$EXPECTED_HOME\" && test -d \"\$HOME\""'
 jtest './jail -e FOO=bar -- sh -c "test \"\$FOO\" = bar"'
@@ -119,17 +108,6 @@ jtest '! ./jail -E JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
 jtest './jail -E! JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
 jtest '! ./jail -E 1BAD -- true'
 jtest '! ./jail -E! 1BAD -- true'
-jtest './jail --home /tmp -- sh -c "test \"\$HOME\" = /tmp"'
-jtest './jail --home /tmp -- sh -c "test \"\$PWD\" = /tmp"'
-jtest './jail --home /tmp --wd / -- sh -c "test \"\$PWD\" = /"'
-jtest './jail --share-home ro -- sh -c "test \"\$HOME\" = \"$HOME\""'
-jtest './jail --share-home ro -- sh -c "test \"\$PWD\" = \"$PWD\""'
-jtest './jail --share-home ro --wd /tmp -- sh -c "test \"\$PWD\" = /tmp"'
-jtest './jail --share-home ro -- ls "$HOME"'
-jtest '! ./jail --share-home ro -- touch "$HOME/.jail-test-share-home"'
-jtest './jail --share-home rw -- touch "$HOME/.jail-test-share-home"'
-jtest '! ./jail --home /tmp --share-home ro -- true'
-rm -f "$HOME/.jail-test-share-home"
 
 jdescribe 'persistent profile home'
 profile_name="jail-test-profile-$$"
@@ -145,7 +123,6 @@ jtest './jail -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
 jtest './jail -P "$profile_name" -- sh -c "IFS=: read -r _ _ _ _ _ home _ < /etc/passwd && test \"\$home\" = \"$profile_jail_home\""'
 jtest './jail --gui -P "$profile_name" -- sh -c "test \"\$HOME\" = \"$profile_jail_home\" && test \"\$XDG_CACHE_HOME\" = /tmp"'
 jtest '! ./jail -P bad/name -- true'
-jtest '! ./jail -P "$profile_name" --home /tmp -- true'
 rm -rf "$profile_dir"
 
 jdescribe 'custom binds'

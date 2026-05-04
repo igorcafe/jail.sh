@@ -37,7 +37,6 @@ Examples:
 ./jail -- emacs
 ./jail -p printf -- sh -c 'printf ok'
 ./jail -b /tmp:/host-tmp:rw -- sh
-./jail --share-wd ro -- ls "$PWD"
 ./jail --net -- curl https://example.com
 ./jail -P browser --gui -- firefox
 ```
@@ -91,18 +90,6 @@ Debug logs include only the main executable and its Nix store or shared library 
 
 - `--net`
   Allow access to the host network namespace.
-
-- `--wd PATH`
-  Change the working directory inside the jail.
-
-- `--share-wd MODE`
-  Bind the current directory at the same path. `MODE` must be `ro` or `rw`.
-
-- `--home PATH`
-  Set `HOME` to `PATH` and use it as the working directory unless `--wd` is also set.
-
-- `--share-home MODE`
-  Bind the user's home directory and set `HOME` without changing the working directory. `MODE` must be `ro` or `rw`.
 
 ## Tests
 

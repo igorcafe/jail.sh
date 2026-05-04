@@ -41,19 +41,11 @@ options:
   -E NAME             copy environment variable from host into the jail
   -P NAME             persist HOME in ~/.local/share/jail.sh/profiles/NAME/home
   --net               allow access to the host network namespace
-  --wd PATH           change working directory inside the jail
-  --share-wd MODE     bind current directory at same path; MODE must be ro or rw
-  --home PATH         alias for -e HOME=PATH
-  --share-home MODE   bind user's HOME into the jail and set HOME; MODE must be ro or rw
 
 examples:
   jail -- emacs
   jail -p sh -p printf -- emacs -nw
   jail -b /tmp:/host-tmp:rw -- sh
-  jail --wd /tmp -- sh
-  jail --share-wd rw -- sh
-  jail --home /tmp -- emacs -nw
-  jail --share-home ro -- emacs -nw
 EOF
 }
 
@@ -68,11 +60,7 @@ custom_binds=()
 custom_devices=()
 custom_env=()
 working_directory=""
-custom_working_directory=0
-shared_working_directory=0
-shared_home_directory=0
 home_directory=""
-custom_home=0
 default_home=0
 env_home_set=0
 share_network=0
@@ -190,43 +178,6 @@ add_device () {
     fi
 
     custom_devices+=("$device")
-}
-
-add_working_directory_bind () {
-    mode="$1"
-
-    if [[ "$mode" != "ro" && "$mode" != "rw" ]]
-    then
-        error "--share-wd mode must be ro or rw"
-        exit 1
-    fi
-
-    wd="$(pwd)"
-    shared_working_directory=1
-    working_directory="$wd"
-    custom_binds+=("$wd" "$wd" "$mode")
-}
-
-add_home_directory_bind () {
-    mode="$1"
-
-    if [[ "$mode" != "ro" && "$mode" != "rw" ]]
-    then
-        error "--share-home mode must be ro or rw"
-        exit 1
-    fi
-
-    home="${HOME:-}"
-    if [[ "$home" == "" ]]
-    then
-        error "--share-home requires HOME to be set"
-        exit 1
-    fi
-
-    shared_home_directory=1
-    home_directory="$home"
-    custom_binds+=("$home" "$home" "$mode")
-    add_custom_env "HOME=$home"
 }
 
 add_custom_env () {
@@ -608,46 +559,6 @@ expand_meta_args () {
                 add_program_resource_args "$2"
                 shift 2
                 ;;
-            -P)
-                if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
-                then
-                    error "-P requires a profile name"
-                    exit 1
-                fi
-
-                profile_name="$2"
-                if [[ ! "$profile_name" =~ ^[A-Za-z0-9._-]+$ || "$profile_name" == *..* ]]
-                then
-                    error "-P requires a simple profile name: $profile_name"
-                    exit 1
-                fi
-
-                if [[ "${HOME:-}" == "" ]]
-                then
-                    error "-P requires HOME to be set"
-                    exit 1
-                fi
-
-                profile_host_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
-                profile_host_home="$profile_host_dir/home"
-                profile_jail_home_name="${USER:-user}"
-                profile_jail_home_name="${profile_jail_home_name//:/_}"
-                profile_jail_home_name="${profile_jail_home_name//\//_}"
-                profile_jail_home="/home/$profile_jail_home_name"
-                if [[ -d "$profile_host_home" ]]
-                then
-                    info "reusing existing profile $profile_name ($profile_host_dir)"
-                else
-                    mkdir -p "$profile_host_home"
-                    info "using new profile $profile_name ($profile_host_dir)"
-                fi
-
-                expanded_args+=(
-                    -b "$profile_host_home:$profile_jail_home:rw"
-                    --home "$profile_jail_home"
-                )
-                shift 2
-                ;;
             *)
                 expanded_args+=("$1")
                 shift
@@ -730,59 +641,42 @@ do
             add_custom_env "$2"
             shift 2
             ;;
-        --home)
+        -P)
             if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
             then
-                error "--home requires a value"
+                error "-P requires a profile name"
                 exit 1
             fi
 
-            if [[ "$custom_home" -eq 1 ]]
+            profile_name="$2"
+            if [[ ! "$profile_name" =~ ^[A-Za-z0-9._-]+$ || "$profile_name" == *..* ]]
             then
-                error "--home can only be used once"
+                error "-P requires a simple profile name: $profile_name"
                 exit 1
             fi
 
-            custom_home=1
-            home_directory="$2"
-            add_custom_env "HOME=$2"
-            shift 2
-            ;;
-        --share-home)
-            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            if [[ "${HOME:-}" == "" ]]
             then
-                error "--share-home requires ro or rw"
+                error "-P requires HOME to be set"
                 exit 1
             fi
 
-            add_home_directory_bind "$2"
-            shift 2
-            ;;
-        --share-wd)
-            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+            profile_host_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
+            profile_host_home="$profile_host_dir/home"
+            profile_jail_home_name="${USER:-user}"
+            profile_jail_home_name="${profile_jail_home_name//:/_}"
+            profile_jail_home_name="${profile_jail_home_name//\//_}"
+            home_directory="/home/$profile_jail_home_name"
+            if [[ -d "$profile_host_home" ]]
             then
-                error "--share-wd requires ro or rw"
-                exit 1
+                info "reusing existing profile $profile_name ($profile_host_dir)"
+            else
+                mkdir -p "$profile_host_home"
+                info "using new profile $profile_name ($profile_host_dir)"
             fi
 
-            add_working_directory_bind "$2"
-            shift 2
-            ;;
-        --wd)
-            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
-            then
-                error "--wd requires a path"
-                exit 1
-            fi
-
-            if [[ "$2" != /* ]]
-            then
-                error "--wd path must be absolute: $2"
-                exit 1
-            fi
-
-            custom_working_directory=1
-            working_directory="$2"
+            custom_binds+=("$profile_host_home" "$home_directory" rw)
+            add_custom_env "HOME=$home_directory"
             shift 2
             ;;
         --*)
@@ -802,19 +696,7 @@ then
     exit 1
 fi
 
-if [[ "$custom_working_directory" -eq 1 && "$shared_working_directory" -eq 1 ]]
-then
-    error "--wd and --share-wd cannot be used together"
-    exit 1
-fi
-
-if [[ "$custom_home" -eq 1 && "$shared_home_directory" -eq 1 ]]
-then
-    error "--home and --share-home cannot be used together"
-    exit 1
-fi
-
-if [[ "$home_directory" != "" && "$working_directory" == "" && "$shared_home_directory" -eq 0 ]]
+if [[ "$home_directory" != "" && "$working_directory" == "" ]]
 then
     working_directory="$home_directory"
 fi

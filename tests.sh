@@ -35,28 +35,46 @@ jtest () {
 }
 
 jskip () {
-    if [[ "$#" -lt 3 || "$2" != jtest ]]
+    if [[ "$#" -lt 3 ]]
     then
-        printf '%sFAIL%s: jskip requires: jskip "condition" jtest "command"\n' "$red" "$reset" >&2
+        printf '%sFAIL%s: jskip requires: jskip "condition" jtest "command" [...]\n' "$red" "$reset" >&2
         exit 1
     fi
 
     condition="$1"
-    shift 2
-    command="$1"
+    shift
+
+    commands=()
+    while [[ "$#" -gt 0 ]]
+    do
+        if [[ "$#" -lt 2 || "$1" != jtest ]]
+        then
+            printf '%sFAIL%s: jskip requires jtest "command" pairs\n' "$red" "$reset" >&2
+            exit 1
+        fi
+
+        commands+=("$2")
+        shift 2
+    done
 
     if output="$(eval "$condition" 2>&1)"
     then
-        printf '%sSKIP%s: %s\n' "$yellow" "$reset" "$command" >&2
-        printf 'Reason: %s\n' "$condition" >&2
-        if [[ "$output" != "" ]]
-        then
-            echo "$output" >&2
-        fi
+        for command in "${commands[@]}"
+        do
+            printf '%sSKIP%s: %s\n' "$yellow" "$reset" "$command" >&2
+            printf 'Reason: %s\n' "$condition" >&2
+            if [[ "$output" != "" ]]
+            then
+                echo "$output" >&2
+            fi
+        done
         return 0
     fi
 
-    jtest "$command"
+    for command in "${commands[@]}"
+    do
+        jtest "$command"
+    done
 }
 
 jdescribe 'command separator'
@@ -99,8 +117,7 @@ jtest './jail --gui -- sh -c "test \"\$XDG_CACHE_HOME\" = /tmp"'
 
 jdescribe 'flag --gui: fonts'
 jskip '[ ! -e /etc/fonts ]' \
-    jtest './jail --gui -- test -e /etc/fonts'
-jskip '[ ! -e /etc/static/fonts ]' \
+    jtest './jail --gui -- test -e /etc/fonts' \
     jtest './jail --gui -- test -e /etc/static/fonts'
 
 jdescribe 'flag --gui: audio'
@@ -109,7 +126,7 @@ jskip '[ ! -e /dev/snd ]' \
 
 jdescribe 'flag --gui: video'
 jskip '[ ! -e /dev/dri ]' \
-    jtest './jail --gui -- test -e /dev/dri'
+    jtest './jail --gui -B "$PWD/testdata/video.mp4:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/video.mp4"'
 
 jdescribe 'flag --gui: input'
 jskip '[ ! -e /sys/class/input -o ! -e /run/udev ]' \

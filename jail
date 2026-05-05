@@ -867,6 +867,7 @@ debug "main executable: ${executable_names[0]} -> ${executable_paths[0]}"
 bw_binds=()
 nix_binds=()
 bound_dests=()
+ld_library_path_dirs=()
 
 add_bind () {
     mode="$1"
@@ -926,6 +927,67 @@ is_under_nix_bind () {
     return 1
 }
 
+add_ld_library_path_dir () {
+    lib="$1"
+    dir="${lib%/*}"
+
+    if [[ "$dir" == "$lib" || "$dir" == "" ]]
+    then
+        return
+    fi
+
+    for ld_library_path_dir in "${ld_library_path_dirs[@]}"
+    do
+        if [[ "$dir" == "$ld_library_path_dir" ]]
+        then
+            return
+        fi
+    done
+
+    ld_library_path_dirs+=("$dir")
+}
+
+add_ld_library_path_value () {
+    value="$1"
+    dirs=()
+    IFS=: read -r -a dirs <<< "$value"
+
+    for dir in "${dirs[@]}"
+    do
+        if [[ "$dir" == "" ]]
+        then
+            continue
+        fi
+
+        add_ld_library_path_dir "$dir/lib"
+    done
+}
+
+set_custom_env () {
+    name="$1"
+    value="$2"
+    replaced=0
+
+    for ((i = 0; i < ${#custom_env[@]}; i += 2))
+    do
+        if [[ "${custom_env[$i]}" == "$name" ]]
+        then
+            if [[ "$replaced" -eq 0 ]]
+            then
+                custom_env[$((i + 1))]="$value"
+                replaced=1
+            else
+                custom_env[$i]=""
+            fi
+        fi
+    done
+
+    if [[ "$replaced" -eq 0 ]]
+    then
+        custom_env+=("$name" "$value")
+    fi
+}
+
 bw_args=(
     --unshare-all
     --clearenv
@@ -963,11 +1025,6 @@ do
 done
 
 add_user_database_binds
-
-for ((i = 0; i < ${#custom_env[@]}; i += 2))
-do
-    bw_args+=(--setenv "${custom_env[$i]}" "${custom_env[$((i + 1))]}")
-done
 
 for i in "${!executable_names[@]}"
 do
@@ -1051,8 +1108,44 @@ do
         then
             debug "library dependency for $executable_name: $lib"
         fi
+        add_ld_library_path_dir "$lib"
         add_bind ro "$lib" "$lib"
     done < <(ldd_paths "$executable_path" | sort -u)
+done
+
+if [[ "${#ld_library_path_dirs[@]}" -gt 0 ]]
+then
+    for ((i = 0; i < ${#custom_env[@]}; i += 2))
+    do
+        if [[ "${custom_env[$i]}" == LD_LIBRARY_PATH ]]
+        then
+            add_ld_library_path_value "${custom_env[$((i + 1))]}"
+        fi
+    done
+
+    ld_library_path=""
+    for ld_library_path_dir in "${ld_library_path_dirs[@]}"
+    do
+        if [[ "$ld_library_path" == "" ]]
+        then
+            ld_library_path="$ld_library_path_dir"
+        else
+            ld_library_path="$ld_library_path:$ld_library_path_dir"
+        fi
+    done
+
+    debug "LD_LIBRARY_PATH: $ld_library_path"
+    set_custom_env LD_LIBRARY_PATH "$ld_library_path"
+fi
+
+for ((i = 0; i < ${#custom_env[@]}; i += 2))
+do
+    if [[ "${custom_env[$i]}" == "" ]]
+    then
+        continue
+    fi
+
+    bw_args+=(--setenv "${custom_env[$i]}" "${custom_env[$((i + 1))]}")
 done
 
 for ((i = 0; i < ${#custom_binds[@]}; i += 3))

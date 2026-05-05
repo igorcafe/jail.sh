@@ -168,11 +168,9 @@ jtest '! ./jail -- readlink /proc/self/ns/net | grep -F "'$host_net_ns'"' \
 jtest './jail --net -- readlink /proc/self/ns/net| grep -F "'$host_net_ns'"' \
 	"must have the same net ns if --net is passed"
 
-jtest './jail --net -- ls /etc/resolv.conf /etc/resolv.conf'
-jskip '[ ! -e /etc/ssl/certs/ca-certificates.crt ]' \
-    jtest './jail --net -- test -r /etc/ssl/certs/ca-certificates.crt'
-jskip '[ ! -e /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem ]' \
-    jtest './jail --net -- test -r /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'
+jtest '! ./jail -- curl http://google.com' 'cant cURL without --net'
+jtest './jail --net -- curl http://google.com' 'cURL a page'
+jtest './jail --net -- curl https://google.com' 'cURL with TLS'
 
 jdescribe 'flag --gui: fonts'
 jskip '[ ! -e /etc/fonts ]' \

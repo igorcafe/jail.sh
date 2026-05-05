@@ -88,6 +88,9 @@ Debug logs include only the main executable and its Nix store or shared library 
 - `-P NAME`
   Persist `HOME` in `~/.local/share/jail.sh/profiles/NAME/home`, mounted inside the jail as `/home/$USER`. Prints whether it is using a new profile or reusing an existing one.
 
+- `--symlink SRC DEST`
+  Create symlink `DEST -> SRC` inside the jail. `DEST` must be absolute.
+
 - `--net`
   Allow access to the host network namespace.
 

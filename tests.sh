@@ -126,6 +126,10 @@ jdescribe 'coreutils'
 jtest './jail --core -- sh -c "test \$(printf ok | wc -c) -eq 2"'
 jtest './jail --core -- sh -c "command -v ls && command -v cp && command -v sort"'
 
+jdescribe 'symlinks'
+jtest './jail -p readlink --symlink /bin/sh /tmp/sh-link -- sh -c "test \"\$(readlink /tmp/sh-link)\" = /bin/sh"'
+jtest '! ./jail --symlink /bin/sh tmp/sh-link -- true'
+
 jdescribe 'devices'
 jtest './jail -- ls /dev/null /dev/zero /dev/random /dev/urandom /dev/tty /dev/shm /dev/stdin /dev/stdout /dev/stderr' 'should have standard devices'
 #jtest './jail -d null -d null -- sh -c "test -e /dev/null"'

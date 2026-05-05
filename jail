@@ -61,6 +61,7 @@ options:
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
   -P NAME             persist HOME in ~/.local/share/jail.sh/profiles/NAME/home
+  --symlink SRC DEST  create symlink DEST -> SRC inside the jail
   --net               allow access to the host network namespace
 
 examples:
@@ -80,6 +81,7 @@ extra_programs=()
 custom_binds=()
 custom_devices=()
 custom_env=()
+custom_symlinks=()
 working_directory=""
 home_directory=""
 default_home=0
@@ -225,6 +227,25 @@ add_custom_env () {
     fi
 
     custom_env+=("$name" "$value")
+}
+
+add_custom_symlink () {
+    src="$1"
+    dest="$2"
+
+    if [[ "$src" == "" || "$dest" == "" ]]
+    then
+        error "--symlink requires SRC DEST"
+        exit 1
+    fi
+
+    if [[ "$dest" != /* ]]
+    then
+        error "--symlink DEST must be absolute: $dest"
+        exit 1
+    fi
+
+    custom_symlinks+=("$src" "$dest")
 }
 
 nix_store_package_dir () {
@@ -426,23 +447,23 @@ add_coreutils_multicall_args () {
     applet_line=$(LC_ALL=C "$coreutils_path" --help 2> /dev/null | grep -A1 'Built-in program' | tail -1 || true)
     applet_line="${applet_line//[/ }"
     applet_line="${applet_line//]/ }"
-    coreutils_bind_args=()
+    coreutils_link_args=(-b! "$coreutils_path:/bin/coreutils:ro")
 
     for program in $applet_line
     do
         if [[ "$program" =~ ^(\[|[A-Za-z0-9._+-]+)$ ]]
         then
-            coreutils_bind_args+=(-b! "$coreutils_path:/bin/$program:ro")
+            coreutils_link_args+=(--symlink /bin/coreutils "/bin/$program")
         fi
     done
 
-    if [[ "${#coreutils_bind_args[@]}" -eq 0 ]]
+    if [[ "${#coreutils_link_args[@]}" -eq 2 ]]
     then
         return 1
     fi
 
     expanded_args+=(-p coreutils)
-    expanded_args+=("${coreutils_bind_args[@]}")
+    expanded_args+=("${coreutils_link_args[@]}")
 }
 
 add_coreutils_args () {
@@ -723,6 +744,16 @@ do
             add_custom_env "HOME=$home_directory"
             shift 2
             ;;
+        --symlink)
+            if [[ "${2:-}" == "" || "${2:-}" == "--" || "${3:-}" == "" || "${3:-}" == "--" ]]
+            then
+                error "--symlink requires SRC DEST"
+                exit 1
+            fi
+
+            add_custom_symlink "$2" "$3"
+            shift 3
+            ;;
         --*)
             error "unknown option: $1"
             exit 1
@@ -867,6 +898,7 @@ debug "main executable: ${executable_names[0]} -> ${executable_paths[0]}"
 bw_binds=()
 nix_binds=()
 bound_dests=()
+symlink_dests=()
 ld_library_path_dirs=()
 
 add_bind () {
@@ -890,6 +922,30 @@ add_bind () {
 
     bound_dests+=("$dest")
     bw_binds+=("$bind_arg" "$src" "$dest")
+}
+
+add_symlink () {
+    src="$1"
+    dest="$2"
+
+    for bound_dest in "${bound_dests[@]}"
+    do
+        if [[ "$dest" == "$bound_dest" ]]
+        then
+            return
+        fi
+    done
+
+    for symlink_dest in "${symlink_dests[@]}"
+    do
+        if [[ "$dest" == "$symlink_dest" ]]
+        then
+            return
+        fi
+    done
+
+    symlink_dests+=("$dest")
+    bw_args+=(--symlink "$src" "$dest")
 }
 
 add_user_database_binds () {
@@ -1151,6 +1207,11 @@ done
 for ((i = 0; i < ${#custom_binds[@]}; i += 3))
 do
     add_bind "${custom_binds[$((i + 2))]}" "${custom_binds[$i]}" "${custom_binds[$((i + 1))]}"
+done
+
+for ((i = 0; i < ${#custom_symlinks[@]}; i += 2))
+do
+    add_symlink "${custom_symlinks[$i]}" "${custom_symlinks[$((i + 1))]}"
 done
 
 # echo "$bw_args"

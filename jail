@@ -60,7 +60,7 @@ options:
   --gui               expose GUI, sound, DRI devices, and driver paths
   -e NAME=VALUE       set an environment variable inside the jail
   -E NAME             copy environment variable from host into the jail
-  -P NAME             persist HOME in ~/.local/share/jail.sh/profiles/NAME/home
+  -P NAME             persist HOME and configurations at ~/.local/share/jail.sh/profiles/NAME
   --symlink SRC DEST  create symlink DEST -> SRC inside the jail
   --net               allow access to the host network namespace
 
@@ -621,6 +621,46 @@ expand_meta_args () {
                 add_program_resource_args "$2"
                 shift 2
                 ;;
+            -P)
+                if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
+                then
+                    error "-P requires a profile name"
+                    exit 1
+                fi
+
+                profile_name="$2"
+                if [[ ! "$profile_name" =~ ^[A-Za-z0-9._-]+$ || "$profile_name" == *..* ]]
+                then
+                    error "-P requires a simple profile name: $profile_name"
+                    exit 1
+                fi
+
+                if [[ "${HOME:-}" == "" ]]
+                then
+                    error "-P requires HOME to be set"
+                    exit 1
+                fi
+
+                profile_host_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
+                profile_host_home="$profile_host_dir/home"
+                profile_jail_home_name="${USER:-user}"
+                profile_jail_home_name="${profile_jail_home_name//:/_}"
+                profile_jail_home_name="${profile_jail_home_name//\//_}"
+                home_directory="/home/$profile_jail_home_name"
+                if [[ -d "$profile_host_home" ]]
+                then
+                    info "reusing existing profile $profile_name ($profile_host_dir)"
+                else
+                    mkdir -p "$profile_host_home"
+                    info "using new profile $profile_name ($profile_host_dir)"
+                fi
+
+                touch "$profile_host_dir/flags"
+                custom_binds+=("$profile_host_home" "$home_directory" rw)
+                add_custom_env "HOME=$home_directory"
+                shift 2
+                eval "set -- $(cat "$profile_host_dir/flags" | tr '\n' ' ') \"\$@\""
+                ;;
             *)
                 expanded_args+=("$1")
                 shift
@@ -703,44 +743,6 @@ do
             fi
 
             add_custom_env "$2"
-            shift 2
-            ;;
-        -P)
-            if [[ "${2:-}" == "" || "${2:-}" == "--" ]]
-            then
-                error "-P requires a profile name"
-                exit 1
-            fi
-
-            profile_name="$2"
-            if [[ ! "$profile_name" =~ ^[A-Za-z0-9._-]+$ || "$profile_name" == *..* ]]
-            then
-                error "-P requires a simple profile name: $profile_name"
-                exit 1
-            fi
-
-            if [[ "${HOME:-}" == "" ]]
-            then
-                error "-P requires HOME to be set"
-                exit 1
-            fi
-
-            profile_host_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
-            profile_host_home="$profile_host_dir/home"
-            profile_jail_home_name="${USER:-user}"
-            profile_jail_home_name="${profile_jail_home_name//:/_}"
-            profile_jail_home_name="${profile_jail_home_name//\//_}"
-            home_directory="/home/$profile_jail_home_name"
-            if [[ -d "$profile_host_home" ]]
-            then
-                info "reusing existing profile $profile_name ($profile_host_dir)"
-            else
-                mkdir -p "$profile_host_home"
-                info "using new profile $profile_name ($profile_host_dir)"
-            fi
-
-            custom_binds+=("$profile_host_home" "$home_directory" rw)
-            add_custom_env "HOME=$home_directory"
             shift 2
             ;;
         --symlink)

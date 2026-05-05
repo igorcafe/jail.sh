@@ -140,33 +140,51 @@ jtest "script -qefc 'before=\$(stty -g); ./jail -- stty raw -echo; test \"\$(stt
 jtest '! ./jail -d jail-does-not-exist -- true'
 #jtest './jail -d! jail-does-not-exist -- true'
 
-jdescribe 'persistent profile home'
 
-profile_name="jail-test-profile-$RANDOM"
-profile_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
-profile_home_dir="$profile_dir/home"
-profile_jail_home="/home/$USER"
-rm -rf "$profile_dir"
+test_persistence () {
+    jdescribe 'persistent profile: home'
+    
+    profile_name="jail-test-profile-$RANDOM"
+    profile_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
+    profile_home_dir="$profile_dir/home"
+    profile_flags="$profile_dir/flags"
+    profile_jail_home="/home/$USER"
+    rm -rf "$profile_dir"
+    
+    jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && \
+    	[[ "$output" == *"using new profile $profile_name ($profile_dir)"* ]]'
+    jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && \
+    	[[ "$output" == *"reusing existing profile $profile_name ($profile_dir)"* ]]'
+    jtest './jail -P "$profile_name" -- sh -c ": > \"\$HOME/file\""'
+    jtest 'test -e "$profile_home_dir/file"'
+    jtest './jail -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
+    jtest './jail -P "$profile_name" -- grep "$USER:x:$(id -u):$(id -g):$USER:$HOME:/bin/sh" /etc/passwd'
+    jtest './jail --gui -P "$profile_name" -- test "$HOME" = "$profile_jail_home"'
+    jtest '! ./jail -P bad/name -- true'
+    
+    
+    jdescribe 'persistent profile: flags'
+    echo "
+    --net
+    -B $PWD/testdata/short.wav:ro
+    -B $PWD/testdata/video.mp4:ro
+    " >> "$profile_flags"
+    jtest './jail -P "$profile_name" -- test -e /etc/hosts'
+    jtest './jail -P "$profile_name" -- ls "$PWD/testdata/short.wav" "$PWD/testdata/video.mp4"' \
+    	    "should use bindings from flags file"
+    
+    rm -rf "$profile_dir"
+}
 
-jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && \
-	[[ "$output" == *"using new profile $profile_name ($profile_dir)"* ]]'
-jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && \
-	[[ "$output" == *"reusing existing profile $profile_name ($profile_dir)"* ]]'
-jtest './jail -P "$profile_name" -- sh -c ": > \"\$HOME/file\""'
-jtest 'test -e "$profile_home_dir/file"'
-jtest './jail -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
-jtest './jail -P "$profile_name" -- grep "$USER:x:$(id -u):$(id -g):$USER:$HOME:/bin/sh" /etc/passwd'
-jtest './jail --gui -P "$profile_name" -- test "$HOME" = "$profile_jail_home"'
-jtest '! ./jail -P bad/name -- true'
-rm -rf "$profile_dir"
+test_persistence
 
 jdescribe 'network'
 host_net_ns="$(readlink /proc/self/ns/net)"
 jtest '! ./jail -- readlink /proc/self/ns/net | grep -F "'$host_net_ns'"' \
-	"must not have the same net ns if --net is not passed"
+	    "must not have the same net ns if --net is not passed"
 
 jtest './jail --net -- readlink /proc/self/ns/net| grep -F "'$host_net_ns'"' \
-	"must have the same net ns if --net is passed"
+	    "must have the same net ns if --net is passed"
 
 jtest '! ./jail -- curl http://google.com' 'cant cURL without --net'
 jtest './jail --net -- curl http://google.com' 'cURL a page'
@@ -174,21 +192,21 @@ jtest './jail --net -- curl https://google.com' 'cURL with TLS'
 
 jdescribe 'flag --gui: fonts'
 jskip '[ ! -e /etc/fonts ]' \
-    jtest './jail --gui -- test -e /etc/fonts'
+      jtest './jail --gui -- test -e /etc/fonts'
 
 jdescribe 'flag --gui: audio'
 jskip '[ ! -e /dev/snd ]' \
-    jtest './jail --gui -B "$PWD/testdata/short.wav:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/short.wav"' 'plays audio'
+      jtest './jail --gui -B "$PWD/testdata/short.wav:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/short.wav"' 'plays audio'
 
 jdescribe 'flag --gui: video'
 jskip '[ ! -e /dev/dri ]' \
-    jtest './jail --gui -B "$PWD/testdata/video.mp4:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/video.mp4"' 'plays video'
+      jtest './jail --gui -B "$PWD/testdata/video.mp4:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/video.mp4"' 'plays video'
 
 jdescribe 'flag --gui: input'
 jskip '[ ! -e /sys/class/input -o ! -e /run/udev ]' \
-    jtest './jail --gui -- sh -c "test -e /sys/class/input && test -e /run/udev"'
+      jtest './jail --gui -- sh -c "test -e /sys/class/input && test -e /run/udev"'
 jskip '[ ! -e /dev/input ]' \
-    jtest './jail --gui -- sh -c "test -e /dev/input"'
+      jtest './jail --gui -- sh -c "test -e /dev/input"'
 
 jdescribe 'environment'
 jtest './jail -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "test \"\$HOME\" = \"\$EXPECTED_HOME\" && test -d \"\$HOME\""'

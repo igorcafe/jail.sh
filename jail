@@ -255,6 +255,23 @@ nix_store_paths () {
     printf '%s\n' "$package_dir"
 }
 
+path_is_under () {
+    path="${1%/}"
+    root="${2%/}"
+
+    if [[ "$path" == "" ]]
+    then
+        path="/"
+    fi
+
+    if [[ "$root" == "" ]]
+    then
+        root="/"
+    fi
+
+    [[ "$path" == "$root" || ( "$root" != "/" && "$path" == "$root"/* ) ]]
+}
+
 add_nix_store_bind_args () {
     path="$1"
 
@@ -266,8 +283,14 @@ add_nix_store_bind_args () {
 
 add_bind_dependency_args () {
     target="$1"
+    covered_root="${2:-}"
 
     if [[ "$target" == "" || "$target" == *:* || ! -e "$target" ]]
+    then
+        return
+    fi
+
+    if [[ "$covered_root" != "" ]] && path_is_under "$target" "$covered_root"
     then
         return
     fi
@@ -308,11 +331,12 @@ should_scan_bind_links () {
 
 add_bind_link_dependencies () {
     src="$1"
+    covered_root="${2:-}"
 
     if [[ -L "$src" ]]
     then
         target=$(symlink_target "$src")
-        add_bind_dependency_args "$target"
+        add_bind_dependency_args "$target" "$covered_root"
     fi
 
     # Recursively scanning bind directories preserves symlinks that point
@@ -332,7 +356,7 @@ add_bind_link_dependencies () {
 add_bind_link_dependencies_recursive () {
     src="$1"
 
-    add_bind_link_dependencies "$src"
+    add_bind_link_dependencies "$src" "$src"
 
     if [[ ! -d "$src" || -L "$src" ]] || ! should_scan_bind_links "$src"
     then
@@ -342,7 +366,7 @@ add_bind_link_dependencies_recursive () {
     while IFS= read -r link
     do
         target=$(symlink_target "$link")
-        add_bind_dependency_args "$target"
+        add_bind_dependency_args "$target" "$src"
     done < <(find "$src" -type l 2> /dev/null || true)
 }
 

@@ -414,7 +414,6 @@ add_gui_args () {
         -d! snd
         -d! dri
         -d! input
-        -e XDG_CACHE_HOME=/tmp
         -E! DBUS_SESSION_BUS_ADDRESS
         -E! XDG_RUNTIME_DIR
         -E! DISPLAY

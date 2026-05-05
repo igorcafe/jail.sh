@@ -21,6 +21,27 @@ debug () {
     fi
 }
 
+debug_args () {
+    if [[ "${DEBUG:-}" == "" ]]
+    then
+        return
+    fi
+
+    local label="$1"
+    local line="$label"
+    local arg=""
+    local quoted=""
+    shift
+
+    for arg in "$@"
+    do
+        printf -v quoted '%q' "$arg"
+        line+=" $quoted"
+    done
+
+    debug "$line"
+}
+
 usage () {
     cat <<'EOF'
 usage: jail [options] -- command [args...]
@@ -574,7 +595,9 @@ fi
 set -- "${default_args[@]}" "$@"
 
 expand_meta_args "$@"
+debug_args "expanded args pass 1:" "${expanded_args[@]}"
 expand_meta_args "${expanded_args[@]}"
+debug_args "expanded args pass 2:" "${expanded_args[@]}"
 set -- "${expanded_args[@]}"
 
 found_separator=0

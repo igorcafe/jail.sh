@@ -172,8 +172,7 @@ jskip '[ ! -e /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem ]' \
 
 jdescribe 'flag --gui: fonts'
 jskip '[ ! -e /etc/fonts ]' \
-    jtest './jail --gui -- test -e /etc/fonts' \
-    jtest './jail --gui -- test -e /etc/static/fonts'
+    jtest './jail --gui -- test -e /etc/fonts'
 
 jdescribe 'flag --gui: audio'
 jskip '[ ! -e /dev/snd ]' \

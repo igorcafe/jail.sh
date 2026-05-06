@@ -43,8 +43,10 @@ debug_args () {
 }
 
 usage () {
-    cat <<'EOF'
+    echo "\
 usage: jail [options] -- command [args...]
+       jail replace command
+       jail restore command
 
 options:
   -p PROGRAM          expose extra program in /bin
@@ -64,17 +66,124 @@ options:
   --symlink SRC DEST  create symlink DEST -> SRC inside the jail
   --net               allow access to the host network namespace
 
+commands:
+  replace COMMAND     create ~/.local/bin/COMMAND wrapper and open editor
+  restore COMMAND     remove ~/.local/bin/COMMAND wrapper
+
 examples:
   jail -- emacs
+  jail replace emacs
+  jail restore emacs
   jail -p sh -p printf -- emacs -nw
   jail -b /tmp:/host-tmp:rw -- sh
+"
+}
+
+replace_command () {
+    if [[ "$#" -ne 1 ]]
+    then
+        error "replace requires exactly one command name"
+        exit 1
+    fi
+
+    command_name="$1"
+    if [[ "$command_name" == */* || ! "$command_name" =~ ^[A-Za-z0-9._+-]+$ ]]
+    then
+        error "replace requires a simple command name: $command_name"
+        exit 1
+    fi
+
+    if [[ "${HOME:-}" == "" ]]
+    then
+        error "replace requires HOME to be set"
+        exit 1
+    fi
+
+    bin_dir="$HOME/.local/bin"
+    wrapper_path="$bin_dir/$command_name"
+    mkdir -p "$bin_dir"
+
+    if [[ ! -e "$wrapper_path" ]]
+    then
+        if ! command_path=$(type -P "$command_name")
+        then
+            error "executable not found in \$PATH: $command_name"
+            exit 1
+        fi
+
+        command_path=$(realpath "$command_path" 2> /dev/null)
+        printf -v command_path_quoted '%q' "$command_path"
+
+        cat > "$wrapper_path" <<EOF
+#!/usr/bin/env bash
+flags=(
+)
+
+jail_bin="\$(command -v jail)"
+exec "\$jail_bin" "\${flags[@]}" -- $command_path_quoted "\$@"
 EOF
+    fi
+
+    chmod +x "$wrapper_path"
+
+    eval "${EDITOR:-nano} $wrapper_path" || error "failed to launch your editor, but you can edit the wrapper manually"
+
+    info "wrapper: $wrapper_path"
+    info 'make sure ~/.local/bin is at the beginning of your PATH'
+    info "run 'hash -r' in your shell so it finds the new wrapper"
+}
+
+restore_command () {
+    if [[ "$#" -ne 1 ]]
+    then
+        error "restore requires exactly one command name"
+        exit 1
+    fi
+
+    command_name="$1"
+    if [[ "$command_name" == */* || ! "$command_name" =~ ^[A-Za-z0-9._+-]+$ ]]
+    then
+        error "restore requires a simple command name: $command_name"
+        exit 1
+    fi
+
+    if [[ "${HOME:-}" == "" ]]
+    then
+        error "restore requires HOME to be set"
+        exit 1
+    fi
+
+    wrapper_path="$HOME/.local/bin/$command_name"
+    if [[ ! -e "$wrapper_path" ]]
+    then
+        error "wrapper does not exist: $wrapper_path"
+        exit 1
+    fi
+
+    rm -f "$wrapper_path"
+
+    info "removed wrapper: $wrapper_path"
+    info "run 'hash -r' in your shell so it forgets the removed wrapper"
 }
 
 if [[ "$#" -eq 0 ]]
 then
     usage >&2
     exit 1
+fi
+
+if [[ "${1:-}" == replace ]]
+then
+    shift
+    replace_command "$@"
+    exit 0
+fi
+
+if [[ "${1:-}" == restore ]]
+then
+    shift
+    restore_command "$@"
+    exit 0
 fi
 
 extra_programs=()
@@ -655,11 +764,9 @@ expand_meta_args () {
                     info "using new profile $profile_name ($profile_host_dir)"
                 fi
 
-                touch "$profile_host_dir/flags"
                 custom_binds+=("$profile_host_home" "$home_directory" rw)
                 add_custom_env "HOME=$home_directory"
                 shift 2
-                eval "set -- $(cat "$profile_host_dir/flags" | tr '\n' ' ') \"\$@\""
                 ;;
             *)
                 expanded_args+=("$1")

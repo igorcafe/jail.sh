@@ -9,6 +9,16 @@ bold=$'\033[1m'
 white=$'\033[1;37m'
 reset=$'\033[0m'
 status=0
+replace_home=""
+
+cleanup () {
+    if [[ "$replace_home" != "" ]]
+    then
+        rm -rf "$replace_home"
+    fi
+}
+
+trap cleanup EXIT
 
 jdescribe () {
     printf '\n%s%s%s\n' "$white" "$1" "$reset" >&2
@@ -116,6 +126,19 @@ jtest '! ./jail'
 jtest '! ./jail ls'
 jtest '! ./jail --'
 
+jdescribe 'replace command'
+replace_home="$(mktemp -d)"
+jtest 'HOME="$replace_home" EDITOR=true ./jail replace true'
+jtest 'test -x "$replace_home/.local/bin/true"'
+jtest 'grep -F "flags=(" "$replace_home/.local/bin/true"'
+jtest 'grep -F "exec \"\$jail_bin\" \"\${flags[@]}\" -- $(realpath "$(type -P true)") \"\$@\"" "$replace_home/.local/bin/true"'
+jtest 'HOME="$replace_home" ./jail restore true'
+jtest '! test -e "$replace_home/.local/bin/true"'
+jtest '! HOME="$replace_home" ./jail restore true'
+jtest 'HOME="$replace_home" EDITOR=true ./jail replace true'
+jtest 'HOME="$replace_home" ./jail restore true'
+jtest '! HOME="$replace_home" EDITOR=true ./jail replace bad/name'
+
 jdescribe 'builtin sh'
 jtest './jail -- bash -c "echo exit | sh"' "sh must be builtin"
 
@@ -147,7 +170,6 @@ test_persistence () {
     profile_name="jail-test-profile-$RANDOM"
     profile_dir="$HOME/.local/share/jail.sh/profiles/$profile_name"
     profile_home_dir="$profile_dir/home"
-    profile_flags="$profile_dir/flags"
     profile_jail_home="/home/$USER"
     rm -rf "$profile_dir"
     
@@ -161,17 +183,6 @@ test_persistence () {
     jtest './jail -P "$profile_name" -- grep "$USER:x:$(id -u):$(id -g):$USER:$HOME:/bin/sh" /etc/passwd'
     jtest './jail --gui -P "$profile_name" -- test "$HOME" = "$profile_jail_home"'
     jtest '! ./jail -P bad/name -- true'
-    
-    
-    jdescribe 'persistent profile: flags'
-    echo "
-    --net
-    -B $PWD/testdata/short.wav:ro
-    -B $PWD/testdata/video.mp4:ro
-    " >> "$profile_flags"
-    jtest './jail -P "$profile_name" -- test -e /etc/hosts'
-    jtest './jail -P "$profile_name" -- ls "$PWD/testdata/short.wav" "$PWD/testdata/video.mp4"' \
-    	    "should use bindings from flags file"
     
     rm -rf "$profile_dir"
 }

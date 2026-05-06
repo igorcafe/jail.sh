@@ -28,27 +28,35 @@ By default it only exposes:
 ## Usage
 
 ```sh
-./jail [options] -- command [args...]
+../jail.sh [options] -- command [args...]
+../jail.sh replace command
+../jail.sh restore command
 ```
 
 Examples:
 
 ```sh
-./jail -- emacs
-./jail -p printf -- sh -c 'printf ok'
-./jail -b /tmp:/host-tmp:rw -- sh
-./jail --net -- curl https://example.com
-./jail -P browser --gui -- firefox
+../jail.sh -- emacs
+../jail.sh replace emacs
+../jail.sh restore emacs
+../jail.sh -p printf -- sh -c 'printf ok'
+../jail.sh -b /tmp:/host-tmp:rw -- sh
+../jail.sh --net -- curl https://example.com
+../jail.sh -P browser --gui -- firefox
 ```
 
-Run `./jail` with no arguments to print the full option list.
+Run `./jail.sh` with no arguments to print the full option list.
+
+`../jail.sh replace command` creates or edits `~/.local/bin/command` and opens it in your editor.
+
+`../jail.sh restore command` removes the existing `~/.local/bin/command` wrapper.
 
 ## Debugging
 
 Set `DEBUG` to print resolution details to stderr:
 
 ```sh
-DEBUG=1 ./jail -- sh
+DEBUG=1 ../jail.sh -- sh
 ```
 
 Debug logs include only the main executable and its Nix store or shared library dependencies.

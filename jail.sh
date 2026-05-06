@@ -79,6 +79,151 @@ examples:
 "
 }
 
+find_desktop_for_command () {
+    local command_name="$1"
+    local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+    local data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    local desktop_dirs=("$data_home/applications")
+    local data_dirs_array=()
+    local desktop_dir=""
+    local desktop_file=""
+    local exec_line=""
+    local data_dir=""
+
+    IFS=: read -r -a data_dirs_array <<< "$data_dirs"
+    for data_dir in "${data_dirs_array[@]}"
+    do
+        desktop_dirs+=("$data_dir/applications")
+    done
+
+    for desktop_dir in "${desktop_dirs[@]}"
+    do
+        [[ -d "$desktop_dir" ]] || continue
+
+        for desktop_file in "$desktop_dir"/*.desktop
+        do
+            [[ -f "$desktop_file" ]] || continue
+            [[ "$desktop_file" != *.jail.desktop ]] || continue
+
+            if ! exec_line=$(grep -m1 '^Exec=' "$desktop_file")
+            then
+                continue
+            fi
+
+            parse_desktop_exec "${exec_line#Exec=}"
+
+            if [[ "$desktop_exec_token" == "$command_name" || "${desktop_exec_token##*/}" == "$command_name" ]]
+            then
+                printf '%s\n' "$desktop_file"
+                return 0
+            fi
+        done
+    done
+
+    return 1
+}
+
+parse_desktop_exec () {
+    local exec_command="$1"
+    local after_quote=""
+
+    desktop_exec_token=""
+    desktop_exec_rest=""
+
+    exec_command="${exec_command#"${exec_command%%[![:space:]]*}"}"
+    if [[ "$exec_command" == \"* ]]
+    then
+        after_quote="${exec_command#\"}"
+        desktop_exec_token="${after_quote%%\"*}"
+        if [[ "$after_quote" == *\"* ]]
+        then
+            desktop_exec_rest="${after_quote#*\"}"
+        fi
+    else
+        desktop_exec_token="${exec_command%%[[:space:]]*}"
+        desktop_exec_rest="${exec_command#"$desktop_exec_token"}"
+    fi
+}
+
+get_desktop_name () {
+    local source_desktop="$1"
+    local name_line=""
+    local source_name="${source_desktop##*/}"
+
+    if name_line=$(grep -m1 '^Name=' "$source_desktop")
+    then
+        printf '%s\n' "${name_line#Name=}"
+    else
+        printf '%s\n' "${source_name%.desktop}"
+    fi
+}
+
+create_jail_desktop_entry () {
+    local wrapper_path="$1"
+    local source_desktop="$2"
+    local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+    local desktop_dir="$data_home/applications"
+    local source_name="${source_desktop##*/}"
+    local target_desktop="$desktop_dir/${source_name%.desktop}.jail.desktop"
+    local exec_line=""
+    local exec_rest=""
+    local line=""
+
+    if ! exec_line=$(grep -m1 '^Exec=' "$source_desktop")
+    then
+        warn "desktop entry has no Exec line: $source_desktop"
+        return 1
+    fi
+
+    parse_desktop_exec "${exec_line#Exec=}"
+    exec_rest="$desktop_exec_rest"
+
+    mkdir -p "$desktop_dir"
+    while IFS= read -r line || [[ "$line" != "" ]]
+    do
+        case "$line" in
+            Exec=*) printf 'Exec=%s%s\n' "$wrapper_path" "$exec_rest" ;;
+            TryExec=*) printf 'TryExec=%s\n' "$wrapper_path" ;;
+            DBusActivatable=*) printf 'DBusActivatable=false\n' ;;
+            Name=*|Name\[*\]=*) printf '%s (sandboxed)\n' "$line" ;;
+            X-Jail-Generated=*|X-Jail-SourceDesktop=*) ;;
+            *) printf '%s\n' "$line" ;;
+        esac
+    done < "$source_desktop" > "$target_desktop"
+
+    printf 'X-Jail-Generated=true\n' >> "$target_desktop"
+    printf 'X-Jail-SourceDesktop=%s\n' "$source_desktop" >> "$target_desktop"
+
+    debug "desktop wrapper: $target_desktop"
+}
+
+remove_jail_desktop_entries () {
+    local wrapper_path="$1"
+    local data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+    local desktop_dir="$data_home/applications"
+    local desktop_file=""
+    local exec_line=""
+
+    [[ -d "$desktop_dir" ]] || return 0
+
+    for desktop_file in "$desktop_dir"/*.jail.desktop
+    do
+        [[ -f "$desktop_file" ]] || continue
+        grep -Fxq 'X-Jail-Generated=true' "$desktop_file" || continue
+
+        if ! exec_line=$(grep -m1 '^Exec=' "$desktop_file")
+        then
+            continue
+        fi
+
+        parse_desktop_exec "${exec_line#Exec=}"
+        [[ "$desktop_exec_token" == "$wrapper_path" ]] || continue
+
+        rm -f "$desktop_file"
+        debug "removed desktop wrapper: $desktop_file"
+    done
+}
+
 replace_command () {
     if [[ "$#" -ne 1 ]]
     then
@@ -87,6 +232,9 @@ replace_command () {
     fi
 
     command_name="$1"
+    desktop_file=""
+    desktop_name=""
+    answer=""
     if [[ "$command_name" == */* || ! "$command_name" =~ ^[A-Za-z0-9._+-]+$ ]]
     then
         error "replace requires a simple command name: $command_name"
@@ -137,9 +285,19 @@ EOF
 
     eval "${EDITOR:-nano} $wrapper_path" || error "failed to launch your editor, but you can edit the wrapper manually"
 
-    info "wrapper: $wrapper_path"
-    info 'make sure ~/.local/bin is at the beginning of your PATH'
-    info "run 'hash -r' in your shell so it finds the new wrapper"
+    debug "wrapper: $wrapper_path"
+    if desktop_file=$(find_desktop_for_command "$command_name")
+    then
+        printf 'Desktop %s detected.\n' "${desktop_file##*/}" >&2
+        desktop_name=$(get_desktop_name "$desktop_file")
+        printf 'Create desktop entry "%s (sandboxed)"? [Y/n]: ' "$desktop_name" >&2
+        if read -r answer && [[ ! "$answer" =~ ^[Nn]([Oo])?$ ]]
+        then
+            create_jail_desktop_entry "$wrapper_path" "$desktop_file"
+        fi
+    fi
+    debug 'make sure ~/.local/bin is at the beginning of your PATH'
+    debug "run 'hash -r' in your shell so it finds the new wrapper"
 }
 
 restore_command () {
@@ -170,9 +328,10 @@ restore_command () {
     fi
 
     rm -f "$wrapper_path"
+    remove_jail_desktop_entries "$wrapper_path"
 
-    info "removed wrapper: $wrapper_path"
-    info "run 'hash -r' in your shell so it forgets the removed wrapper"
+    debug "removed wrapper: $wrapper_path"
+    debug "run 'hash -r' in your shell so it forgets the removed wrapper"
 }
 
 if [[ "$#" -eq 0 ]]

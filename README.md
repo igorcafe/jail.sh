@@ -29,16 +29,16 @@ By default it only exposes:
 
 ```sh
 ../jail.sh [options] -- command [args...]
-../jail.sh replace command
-../jail.sh restore command
+../jail.sh add command
+../jail.sh rm command
 ```
 
 Examples:
 
 ```sh
 ../jail.sh -- emacs
-../jail.sh replace emacs
-../jail.sh restore emacs
+../jail.sh add emacs
+../jail.sh rm emacs
 ../jail.sh -p printf -- sh -c 'printf ok'
 ../jail.sh -b /tmp:/host-tmp:rw -- sh
 ../jail.sh --net -- curl https://example.com
@@ -47,9 +47,9 @@ Examples:
 
 Run `./jail.sh` with no arguments to print the full option list.
 
-`../jail.sh replace command` creates or edits `~/.local/bin/command` and opens it in your editor.
+`../jail.sh add command` creates or edits `~/.local/bin/command` and opens it in your editor.
 
-`../jail.sh restore command` removes the existing `~/.local/bin/command` wrapper.
+`../jail.sh rm command` removes the existing `~/.local/bin/command` wrapper.
 
 ## Debugging
 

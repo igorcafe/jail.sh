@@ -45,8 +45,8 @@ debug_args () {
 usage () {
     echo "\
 usage: jail [options] -- command [args...]
-       jail replace command
-       jail restore command
+       jail add command
+       jail rm command
 
 options:
   -p PROGRAM          expose extra program in /bin
@@ -67,13 +67,13 @@ options:
   --net               allow access to the host network namespace
 
 commands:
-  replace COMMAND     create ~/.local/bin/COMMAND wrapper and open editor
-  restore COMMAND     remove ~/.local/bin/COMMAND wrapper
+  add COMMAND         create ~/.local/bin/COMMAND wrapper and open editor
+  rm COMMAND          remove ~/.local/bin/COMMAND wrapper
 
 examples:
   jail -- emacs
-  jail replace emacs
-  jail restore emacs
+  jail add emacs
+  jail rm emacs
   jail -p sh -p printf -- emacs -nw
   jail -b /tmp:/host-tmp:rw -- sh
 "
@@ -224,10 +224,10 @@ remove_jail_desktop_entries () {
     done
 }
 
-replace_command () {
+add_command () {
     if [[ "$#" -ne 1 ]]
     then
-        error "replace requires exactly one command name"
+        error "add requires exactly one command name"
         exit 1
     fi
 
@@ -237,13 +237,13 @@ replace_command () {
     answer=""
     if [[ "$command_name" == */* || ! "$command_name" =~ ^[A-Za-z0-9._+-]+$ ]]
     then
-        error "replace requires a simple command name: $command_name"
+        error "add requires a simple command name: $command_name"
         exit 1
     fi
 
     if [[ "${HOME:-}" == "" ]]
     then
-        error "replace requires HOME to be set"
+        error "add requires HOME to be set"
         exit 1
     fi
 
@@ -300,23 +300,23 @@ EOF
     debug "run 'hash -r' in your shell so it finds the new wrapper"
 }
 
-restore_command () {
+rm_command () {
     if [[ "$#" -ne 1 ]]
     then
-        error "restore requires exactly one command name"
+        error "rm requires exactly one command name"
         exit 1
     fi
 
     command_name="$1"
     if [[ "$command_name" == */* || ! "$command_name" =~ ^[A-Za-z0-9._+-]+$ ]]
     then
-        error "restore requires a simple command name: $command_name"
+        error "rm requires a simple command name: $command_name"
         exit 1
     fi
 
     if [[ "${HOME:-}" == "" ]]
     then
-        error "restore requires HOME to be set"
+        error "rm requires HOME to be set"
         exit 1
     fi
 
@@ -340,17 +340,17 @@ then
     exit 1
 fi
 
-if [[ "${1:-}" == replace ]]
+if [[ "${1:-}" == add ]]
 then
     shift
-    replace_command "$@"
+    add_command "$@"
     exit 0
 fi
 
-if [[ "${1:-}" == restore ]]
+if [[ "${1:-}" == rm ]]
 then
     shift
-    restore_command "$@"
+    rm_command "$@"
     exit 0
 fi
 

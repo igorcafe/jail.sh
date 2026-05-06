@@ -9,12 +9,12 @@ bold=$'\033[1m'
 white=$'\033[1;37m'
 reset=$'\033[0m'
 status=0
-replace_home=""
+add_home=""
 
 cleanup () {
-    if [[ "$replace_home" != "" ]]
+    if [[ "$add_home" != "" ]]
     then
-        rm -rf "$replace_home"
+        rm -rf "$add_home"
     fi
 }
 
@@ -126,26 +126,26 @@ jtest '! ./jail'
 jtest '! ./jail.sh ls'
 jtest '! ./jail.sh --'
 
-jdescribe 'replace command'
-replace_home="$(mktemp -d)"
-jtest 'mkdir -p "$replace_home/.local/share/applications" && printf "[Desktop Entry]\nType=Application\nName=True\nExec=true %%F\n" > "$replace_home/.local/share/applications/true.desktop"'
-jtest 'replace_output=$(printf "\n" | HOME="$replace_home" XDG_DATA_HOME="$replace_home/.local/share" EDITOR=true ./jail.sh replace true 2>&1) && grep -F "Desktop true.desktop detected." <<< "$replace_output" && grep -F "Create desktop entry \"True (sandboxed)\"? [Y/n]:" <<< "$replace_output"'
-jtest 'test -x "$replace_home/.local/bin/true"'
-jtest 'test -f "$replace_home/.local/share/applications/true.jail.desktop"'
-jtest 'grep -F "Name=True (sandboxed)" "$replace_home/.local/share/applications/true.jail.desktop"'
-jtest 'grep -F "Exec=$replace_home/.local/bin/true %F" "$replace_home/.local/share/applications/true.jail.desktop"'
-jtest 'grep -F "X-Jail-Generated=true" "$replace_home/.local/share/applications/true.jail.desktop"'
-jtest 'grep -F "flags=(" "$replace_home/.local/bin/true"'
-jtest 'jail_path=$(type -P jail || printf "%s" "$PWD/./jail.sh"); grep -F "exec $jail_path \"\${flags[@]}\" -- $(realpath "$(type -P true)") \"\$@\"" "$replace_home/.local/bin/true"'
-jtest 'printf "[Desktop Entry]\nName=Manual\nExec=$replace_home/.local/bin/true\n" > "$replace_home/.local/share/applications/manual.jail.desktop"'
-jtest 'HOME="$replace_home" ./jail.sh restore true'
-jtest '! test -e "$replace_home/.local/bin/true"'
-jtest '! test -e "$replace_home/.local/share/applications/true.jail.desktop"'
-jtest 'test -e "$replace_home/.local/share/applications/manual.jail.desktop"'
-jtest '! HOME="$replace_home" ./jail.sh restore true'
-jtest 'HOME="$replace_home" EDITOR=true ./jail.sh replace true'
-jtest 'HOME="$replace_home" ./jail.sh restore true'
-jtest '! HOME="$replace_home" EDITOR=true ./jail.sh replace bad/name'
+jdescribe 'add command'
+add_home="$(mktemp -d)"
+jtest 'mkdir -p "$add_home/.local/share/applications" && printf "[Desktop Entry]\nType=Application\nName=True\nExec=true %%F\n" > "$add_home/.local/share/applications/true.desktop"'
+jtest 'add_output=$(printf "\n" | HOME="$add_home" XDG_DATA_HOME="$add_home/.local/share" EDITOR=true ./jail.sh add true 2>&1) && grep -F "Desktop true.desktop detected." <<< "$add_output" && grep -F "Create desktop entry \"True (sandboxed)\"? [Y/n]:" <<< "$add_output"'
+jtest 'test -x "$add_home/.local/bin/true"'
+jtest 'test -f "$add_home/.local/share/applications/true.jail.desktop"'
+jtest 'grep -F "Name=True (sandboxed)" "$add_home/.local/share/applications/true.jail.desktop"'
+jtest 'grep -F "Exec=$add_home/.local/bin/true %F" "$add_home/.local/share/applications/true.jail.desktop"'
+jtest 'grep -F "X-Jail-Generated=true" "$add_home/.local/share/applications/true.jail.desktop"'
+jtest 'grep -F "flags=(" "$add_home/.local/bin/true"'
+jtest 'jail_path=$(type -P jail || printf "%s" "$PWD/./jail.sh"); grep -F "exec $jail_path \"\${flags[@]}\" -- $(realpath "$(type -P true)") \"\$@\"" "$add_home/.local/bin/true"'
+jtest 'printf "[Desktop Entry]\nName=Manual\nExec=$add_home/.local/bin/true\n" > "$add_home/.local/share/applications/manual.jail.desktop"'
+jtest 'HOME="$add_home" ./jail.sh rm true'
+jtest '! test -e "$add_home/.local/bin/true"'
+jtest '! test -e "$add_home/.local/share/applications/true.jail.desktop"'
+jtest 'test -e "$add_home/.local/share/applications/manual.jail.desktop"'
+jtest '! HOME="$add_home" ./jail.sh rm true'
+jtest 'HOME="$add_home" EDITOR=true ./jail.sh add true'
+jtest 'HOME="$add_home" ./jail.sh rm true'
+jtest '! HOME="$add_home" EDITOR=true ./jail.sh add bad/name'
 
 jdescribe 'builtin sh'
 jtest './jail.sh -- bash -c "echo exit | sh"' "sh must be builtin"

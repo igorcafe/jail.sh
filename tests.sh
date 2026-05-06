@@ -116,52 +116,52 @@ jskip () {
 }
 
 jdescribe 'command separator'
-jtest './jail -- pwd | grep -x "$HOME"' "PWD must equal HOME=$HOME"
-jtest '! ./jail -- ls | read -n1' "PWD must be empty if not binded"
-jtest './jail -- ls '$HOME'' "home must exist"
-jtest './jail -B "${PWD}:ro" -- pwd | grep -x $PWD' "if host PWD is mounted, sandbox PWD must be the same"
+jtest './jail.sh -- pwd | grep -x "$HOME"' "PWD must equal HOME=$HOME"
+jtest '! ./jail.sh -- ls | read -n1' "PWD must be empty if not binded"
+jtest './jail.sh -- ls '$HOME'' "home must exist"
+jtest './jail.sh -B "${PWD}:ro" -- pwd | grep -x $PWD' "if host PWD is mounted, sandbox PWD must be the same"
 
 jdescribe 'incorrect usage'
 jtest '! ./jail'
-jtest '! ./jail ls'
-jtest '! ./jail --'
+jtest '! ./jail.sh ls'
+jtest '! ./jail.sh --'
 
 jdescribe 'replace command'
 replace_home="$(mktemp -d)"
-jtest 'HOME="$replace_home" EDITOR=true ./jail replace true'
+jtest 'HOME="$replace_home" EDITOR=true ./jail.sh replace true'
 jtest 'test -x "$replace_home/.local/bin/true"'
 jtest 'grep -F "flags=(" "$replace_home/.local/bin/true"'
 jtest 'grep -F "exec \"\$jail_bin\" \"\${flags[@]}\" -- $(realpath "$(type -P true)") \"\$@\"" "$replace_home/.local/bin/true"'
-jtest 'HOME="$replace_home" ./jail restore true'
+jtest 'HOME="$replace_home" ./jail.sh restore true'
 jtest '! test -e "$replace_home/.local/bin/true"'
-jtest '! HOME="$replace_home" ./jail restore true'
-jtest 'HOME="$replace_home" EDITOR=true ./jail replace true'
-jtest 'HOME="$replace_home" ./jail restore true'
-jtest '! HOME="$replace_home" EDITOR=true ./jail replace bad/name'
+jtest '! HOME="$replace_home" ./jail.sh restore true'
+jtest 'HOME="$replace_home" EDITOR=true ./jail.sh replace true'
+jtest 'HOME="$replace_home" ./jail.sh restore true'
+jtest '! HOME="$replace_home" EDITOR=true ./jail.sh replace bad/name'
 
 jdescribe 'builtin sh'
-jtest './jail -- bash -c "echo exit | sh"' "sh must be builtin"
+jtest './jail.sh -- bash -c "echo exit | sh"' "sh must be builtin"
 
 jdescribe 'extra programs'
-jtest './jail -p printf -p cat -- sh -c "printf ok && cat /dev/null"'
+jtest './jail.sh -p printf -p cat -- sh -c "printf ok && cat /dev/null"'
 
 jdescribe 'coreutils'
-jtest './jail --core -- sh -c "test \$(printf ok | wc -c) -eq 2"'
-jtest './jail --core -- sh -c "command -v ls && command -v cp && command -v sort"'
+jtest './jail.sh --core -- sh -c "test \$(printf ok | wc -c) -eq 2"'
+jtest './jail.sh --core -- sh -c "command -v ls && command -v cp && command -v sort"'
 
 jdescribe 'symlinks'
-jtest './jail -p readlink --symlink /bin/sh /tmp/sh-link -- sh -c "test \"\$(readlink /tmp/sh-link)\" = /bin/sh"'
-jtest '! ./jail --symlink /bin/sh tmp/sh-link -- true'
+jtest './jail.sh -p readlink --symlink /bin/sh /tmp/sh-link -- sh -c "test \"\$(readlink /tmp/sh-link)\" = /bin/sh"'
+jtest '! ./jail.sh --symlink /bin/sh tmp/sh-link -- true'
 
 jdescribe 'devices'
-jtest './jail -- ls /dev/null /dev/zero /dev/random /dev/urandom /dev/tty /dev/shm /dev/stdin /dev/stdout /dev/stderr' 'should have standard devices'
-#jtest './jail -d null -d null -- sh -c "test -e /dev/null"'
-jtest "script -qefc './jail -- sh -c \"test -t 0 && : < /dev/tty\"' /dev/null"
-jtest "script -qefc 'before=\$(stty -g); ./jail -- stty raw -echo; test \"\$(stty -g)\" = \"\$before\"' /dev/null"
-#jtest '! ./jail -d /dev/null -- true'
-#jtest '! ./jail -d ../null -- true'
-jtest '! ./jail -d jail-does-not-exist -- true'
-#jtest './jail -d! jail-does-not-exist -- true'
+jtest './jail.sh -- ls /dev/null /dev/zero /dev/random /dev/urandom /dev/tty /dev/shm /dev/stdin /dev/stdout /dev/stderr' 'should have standard devices'
+#jtest './jail.sh -d null -d null -- sh -c "test -e /dev/null"'
+jtest "script -qefc './jail.sh -- sh -c \"test -t 0 && : < /dev/tty\"' /dev/null"
+jtest "script -qefc 'before=\$(stty -g); ./jail.sh -- stty raw -echo; test \"\$(stty -g)\" = \"\$before\"' /dev/null"
+#jtest '! ./jail.sh -d /dev/null -- true'
+#jtest '! ./jail.sh -d ../null -- true'
+jtest '! ./jail.sh -d jail-does-not-exist -- true'
+#jtest './jail.sh -d! jail-does-not-exist -- true'
 
 
 test_persistence () {
@@ -173,16 +173,16 @@ test_persistence () {
     profile_jail_home="/home/$USER"
     rm -rf "$profile_dir"
     
-    jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && \
+    jtest 'output="$(./jail.sh -P "$profile_name" -- true 2>&1)" && \
     	[[ "$output" == *"using new profile $profile_name ($profile_dir)"* ]]'
-    jtest 'output="$(./jail -P "$profile_name" -- true 2>&1)" && \
+    jtest 'output="$(./jail.sh -P "$profile_name" -- true 2>&1)" && \
     	[[ "$output" == *"reusing existing profile $profile_name ($profile_dir)"* ]]'
-    jtest './jail -P "$profile_name" -- sh -c ": > \"\$HOME/file\""'
+    jtest './jail.sh -P "$profile_name" -- sh -c ": > \"\$HOME/file\""'
     jtest 'test -e "$profile_home_dir/file"'
-    jtest './jail -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
-    jtest './jail -P "$profile_name" -- grep "$USER:x:$(id -u):$(id -g):$USER:$HOME:/bin/sh" /etc/passwd'
-    jtest './jail --gui -P "$profile_name" -- test "$HOME" = "$profile_jail_home"'
-    jtest '! ./jail -P bad/name -- true'
+    jtest './jail.sh -P "$profile_name" -- sh -c "test -e \"\$HOME/file\""'
+    jtest './jail.sh -P "$profile_name" -- grep "$USER:x:$(id -u):$(id -g):$USER:$HOME:/bin/sh" /etc/passwd'
+    jtest './jail.sh --gui -P "$profile_name" -- test "$HOME" = "$profile_jail_home"'
+    jtest '! ./jail.sh -P bad/name -- true'
     
     rm -rf "$profile_dir"
 }
@@ -191,72 +191,72 @@ test_persistence
 
 jdescribe 'network'
 host_net_ns="$(readlink /proc/self/ns/net)"
-jtest '! ./jail -- readlink /proc/self/ns/net | grep -F "'$host_net_ns'"' \
+jtest '! ./jail.sh -- readlink /proc/self/ns/net | grep -F "'$host_net_ns'"' \
 	    "must not have the same net ns if --net is not passed"
 
-jtest './jail --net -- readlink /proc/self/ns/net| grep -F "'$host_net_ns'"' \
+jtest './jail.sh --net -- readlink /proc/self/ns/net| grep -F "'$host_net_ns'"' \
 	    "must have the same net ns if --net is passed"
 
-jtest '! ./jail -- curl http://google.com' 'cant cURL without --net'
-jtest './jail --net -- curl http://google.com' 'cURL a page'
-jtest './jail --net -- curl https://google.com' 'cURL with TLS'
+jtest '! ./jail.sh -- curl http://google.com' 'cant cURL without --net'
+jtest './jail.sh --net -- curl http://google.com' 'cURL a page'
+jtest './jail.sh --net -- curl https://google.com' 'cURL with TLS'
 
 jdescribe 'flag --gui: fonts'
 jskip '[ ! -e /etc/fonts ]' \
-      jtest './jail --gui -- test -e /etc/fonts'
+      jtest './jail.sh --gui -- test -e /etc/fonts'
 
 jdescribe 'flag --gui: audio'
 jskip '[ ! -e /dev/snd ]' \
-      jtest './jail --gui -B "$PWD/testdata/short.wav:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/short.wav"' 'plays audio'
+      jtest './jail.sh --gui -B "$PWD/testdata/short.wav:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/short.wav"' 'plays audio'
 
 jdescribe 'flag --gui: video'
 jskip '[ ! -e /dev/dri ]' \
-      jtest './jail --gui -B "$PWD/testdata/video.mp4:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/video.mp4"' 'plays video'
+      jtest './jail.sh --gui -B "$PWD/testdata/video.mp4:ro" -- ffplay -hide_banner -autoexit -i "$PWD/testdata/video.mp4"' 'plays video'
 
 jdescribe 'flag --gui: input'
 jskip '[ ! -e /sys/class/input -o ! -e /run/udev ]' \
-      jtest './jail --gui -- sh -c "test -e /sys/class/input && test -e /run/udev"'
+      jtest './jail.sh --gui -- sh -c "test -e /sys/class/input && test -e /run/udev"'
 jskip '[ ! -e /dev/input ]' \
-      jtest './jail --gui -- sh -c "test -e /dev/input"'
+      jtest './jail.sh --gui -- sh -c "test -e /dev/input"'
 
 jdescribe 'environment'
-jtest './jail -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "test \"\$HOME\" = \"\$EXPECTED_HOME\" && test -d \"\$HOME\""'
-jtest './jail -e FOO=bar -- sh -c "test \"\$FOO\" = bar"'
-jtest './jail -E HOME -- sh -c "test \"\$HOME\" = \"$HOME\""'
-jtest './jail -e "EXPECTED_UID=$(id -u)" -e "EXPECTED_GID=$(id -g)" -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "IFS=: read -r _ _ uid gid _ home _ < /etc/passwd && test \"\$uid\" = \"\$EXPECTED_UID\" && test \"\$gid\" = \"\$EXPECTED_GID\" && test \"\$home\" = \"\$EXPECTED_HOME\" && IFS=: read -r _ _ group_gid _ < /etc/group && test \"\$group_gid\" = \"\$EXPECTED_GID\" && test -r /etc/nsswitch.conf"'
-jtest '! ./jail -E JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
-jtest './jail -E! JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
-jtest '! ./jail -E 1BAD -- true'
-jtest '! ./jail -E! 1BAD -- true'
+jtest './jail.sh -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "test \"\$HOME\" = \"\$EXPECTED_HOME\" && test -d \"\$HOME\""'
+jtest './jail.sh -e FOO=bar -- sh -c "test \"\$FOO\" = bar"'
+jtest './jail.sh -E HOME -- sh -c "test \"\$HOME\" = \"$HOME\""'
+jtest './jail.sh -e "EXPECTED_UID=$(id -u)" -e "EXPECTED_GID=$(id -g)" -e "EXPECTED_HOME=/home/${USER:-user}" -- sh -c "IFS=: read -r _ _ uid gid _ home _ < /etc/passwd && test \"\$uid\" = \"\$EXPECTED_UID\" && test \"\$gid\" = \"\$EXPECTED_GID\" && test \"\$home\" = \"\$EXPECTED_HOME\" && IFS=: read -r _ _ group_gid _ < /etc/group && test \"\$group_gid\" = \"\$EXPECTED_GID\" && test -r /etc/nsswitch.conf"'
+jtest '! ./jail.sh -E JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
+jtest './jail.sh -E! JAIL_TEST_ENV_DOES_NOT_EXIST -- true'
+jtest '! ./jail.sh -E 1BAD -- true'
+jtest '! ./jail.sh -E! 1BAD -- true'
 
 jdescribe 'custom binds'
 rm -f .jail-test-touch
-jtest './jail -b "$PWD:$PWD:ro" -- ls "$PWD"'
-jtest './jail -b ".:.:ro" -- ls "$PWD"'
-jtest '! ./jail -b "$PWD:$PWD:ro" -- touch "$PWD/.jail-test-touch"'
-jtest './jail -b "$PWD:$PWD:rw" -- ls "$PWD"'
-jtest './jail -b "$PWD:$PWD:rw" -- touch "$PWD/.jail-test-touch"'
-jtest './jail -b! "/jail-test-does-not-exist:/jail-test-does-not-exist:ro" -- true'
-jtest '! ./jail -b "$PWD:$PWD" -- true'
-jtest '! ./jail -b! "$PWD:$PWD" -- true'
-jtest './jail -B "$PWD:ro" -- ls "$PWD"'
-jtest './jail -B ".:ro" -- ls "$PWD"'
-jtest '! ./jail -B "$PWD:ro" -- touch "$PWD/.jail-test-touch"'
-jtest './jail -B "$PWD:rw" -- touch "$PWD/.jail-test-touch"'
-jtest './jail -B! "/jail-test-does-not-exist:ro" -- true'
-jtest './jail -B+! "/jail-test-does-not-exist:ro" -- true'
-jtest '! ./jail -B "$PWD" -- true'
-jtest '! ./jail -B "$PWD:bad" -- true'
-jtest '! ./jail -B! "$PWD:bad" -- true'
+jtest './jail.sh -b "$PWD:$PWD:ro" -- ls "$PWD"'
+jtest './jail.sh -b ".:.:ro" -- ls "$PWD"'
+jtest '! ./jail.sh -b "$PWD:$PWD:ro" -- touch "$PWD/.jail-test-touch"'
+jtest './jail.sh -b "$PWD:$PWD:rw" -- ls "$PWD"'
+jtest './jail.sh -b "$PWD:$PWD:rw" -- touch "$PWD/.jail-test-touch"'
+jtest './jail.sh -b! "/jail-test-does-not-exist:/jail-test-does-not-exist:ro" -- true'
+jtest '! ./jail.sh -b "$PWD:$PWD" -- true'
+jtest '! ./jail.sh -b! "$PWD:$PWD" -- true'
+jtest './jail.sh -B "$PWD:ro" -- ls "$PWD"'
+jtest './jail.sh -B ".:ro" -- ls "$PWD"'
+jtest '! ./jail.sh -B "$PWD:ro" -- touch "$PWD/.jail-test-touch"'
+jtest './jail.sh -B "$PWD:rw" -- touch "$PWD/.jail-test-touch"'
+jtest './jail.sh -B! "/jail-test-does-not-exist:ro" -- true'
+jtest './jail.sh -B+! "/jail-test-does-not-exist:ro" -- true'
+jtest '! ./jail.sh -B "$PWD" -- true'
+jtest '! ./jail.sh -B "$PWD:bad" -- true'
+jtest '! ./jail.sh -B! "$PWD:bad" -- true'
 rm -rf .jail-test-link .jail-test-link-dir .jail-test-link-target
 mkdir .jail-test-link-target .jail-test-link-dir
 touch .jail-test-link-target/file
 ln -s .jail-test-link-target .jail-test-link
 ln -s "$PWD/.jail-test-link-target" .jail-test-link-dir/target
-jtest './jail -B "$PWD/.jail-test-link:ro" -- sh -c "test -e \"$PWD/.jail-test-link/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
-jtest '! ./jail -B "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\""'
-jtest './jail -B+ "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
-jtest './jail -B+ ".jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
+jtest './jail.sh -B "$PWD/.jail-test-link:ro" -- sh -c "test -e \"$PWD/.jail-test-link/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
+jtest '! ./jail.sh -B "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\""'
+jtest './jail.sh -B+ "$PWD/.jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
+jtest './jail.sh -B+ ".jail-test-link-dir:ro" -- sh -c "test -e \"$PWD/.jail-test-link-dir/target/file\" && test -e \"$PWD/.jail-test-link-target/file\""'
 rm -rf .jail-test-link .jail-test-link-dir .jail-test-link-target
 rm -f .jail-test-touch
 

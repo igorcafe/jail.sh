@@ -213,6 +213,9 @@ jtest './jail.sh --net -- curl https://google.com' 'cURL with TLS'
 jdescribe 'flag --gui: fonts'
 jskip '[ ! -e /etc/fonts ]' \
       jtest './jail.sh --gui -- test -e /etc/fonts'
+jskip '[ ! -L /etc/fonts/fonts.conf ]' \
+      jtest 'font_bind=$(mktemp -d) && ./jail.sh --gui -B "${font_bind}:rw" -- sh -c "test -e /etc/fonts/fonts.conf"'
+jtest 'font_home=$(mktemp -d) && mkdir -p "$font_home/fonts" && XDG_DATA_HOME="$font_home" ./jail.sh --gui -- test -e "$font_home/fonts"'
 
 jdescribe 'flag --gui: audio'
 jskip '[ ! -e /dev/snd ]' \

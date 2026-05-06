@@ -653,10 +653,23 @@ add_bind_link_dependencies () {
 
 add_bind_link_dependencies_recursive () {
     src="$1"
+    covered_root="${2:-$src}"
+    target=""
 
-    add_bind_link_dependencies "$src" "$src"
+    add_bind_link_dependencies "$src" "$covered_root"
 
-    if [[ ! -d "$src" || -L "$src" ]] || ! should_scan_bind_links "$src"
+    if [[ -L "$src" ]]
+    then
+        target=$(symlink_target "$src")
+        if [[ -d "$target" ]] && should_scan_bind_links "$target"
+        then
+            add_bind_link_dependencies_recursive "$target" "$covered_root"
+        fi
+
+        return
+    fi
+
+    if [[ ! -d "$src" ]] || ! should_scan_bind_links "$src"
     then
         return
     fi
@@ -664,7 +677,12 @@ add_bind_link_dependencies_recursive () {
     while IFS= read -r link
     do
         target=$(symlink_target "$link")
-        add_bind_dependency_args "$target" "$src"
+        if path_is_under "$target" "$src"
+        then
+            continue
+        fi
+
+        add_bind_dependency_args "$target" "$covered_root"
     done < <(find "$src" -type l 2> /dev/null || true)
 }
 
@@ -774,8 +792,8 @@ add_gui_args () {
         -B! /run/opengl-driver:ro
         -B! "${XDG_RUNTIME_DIR:-}:rw"
         -B! "${XAUTHORITY:-}:ro"
+        -B! "${XDG_DATA_HOME:-$HOME/.local/share}/fonts:ro"
     )
-
 }
 
 expand_meta_args () {

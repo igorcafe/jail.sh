@@ -944,7 +944,7 @@ expand_meta_args () {
     done
 }
 
-default_args=(-d null -d zero -d random -d urandom -d tty)
+default_args=(-d null -d zero -d random -d urandom -d tty -B! /etc/localtime:ro)
 
 if [[ -v LOCALE_ARCHIVE && -e "$LOCALE_ARCHIVE" ]]
 then

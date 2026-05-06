@@ -120,6 +120,7 @@ jtest './jail.sh -- pwd | grep -x "$HOME"' "PWD must equal HOME=$HOME"
 jtest '! ./jail.sh -- ls | read -n1' "PWD must be empty if not binded"
 jtest './jail.sh -- ls '$HOME'' "home must exist"
 jtest './jail.sh -B "${PWD}:ro" -- pwd | grep -x $PWD' "if host PWD is mounted, sandbox PWD must be the same"
+jtest '[[ "$(./jail.sh -- date +%z)" == "$(date +%z)" ]]' "timezone offset must match host"
 
 jdescribe 'incorrect usage'
 jtest '! ./jail'

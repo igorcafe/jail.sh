@@ -114,13 +114,22 @@ replace_command () {
         command_path=$(realpath "$command_path" 2> /dev/null)
         printf -v command_path_quoted '%q' "$command_path"
 
+        if ! jail_path=$(type -P jail)
+        then
+            case "$0" in
+                /*) jail_path="$0" ;;
+                */*) jail_path="$PWD/$0" ;;
+                *) error "executable not found in \$PATH: jail"; exit 1 ;;
+            esac
+        fi
+        printf -v jail_path_quoted '%q' "$jail_path"
+
         cat > "$wrapper_path" <<EOF
 #!/usr/bin/env bash
 flags=(
 )
 
-jail_bin="\$(command -v jail)"
-exec "\$jail_bin" "\${flags[@]}" -- $command_path_quoted "\$@"
+exec $jail_path_quoted "\${flags[@]}" -- $command_path_quoted "\$@"
 EOF
     fi
 

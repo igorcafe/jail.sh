@@ -613,7 +613,7 @@ add_gui_args () {
         -B+! /etc/fonts:ro
         -B! /etc/machine-id:ro
         -B! /run/opengl-driver:ro
-        -B! "${XDG_RUNTIME_DIR:-}:ro"
+        -B! "${XDG_RUNTIME_DIR:-}:rw"
         -B! "${XAUTHORITY:-}:ro"
     )
 
